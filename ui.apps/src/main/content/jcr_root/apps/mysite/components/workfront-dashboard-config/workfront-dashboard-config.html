@@ -1,0 +1,30 @@
+<!--/* Workfront Dashboard Config - author summary (edit mode only) */-->
+<sly data-sly-use.model="com.mysite.core.models.WorkfrontDashboardConfigModel"
+     data-sly-test.isEdit="${wcmmode.edit || wcmmode.preview}"></sly>
+
+<sly data-sly-test="${isEdit}">
+    <div class="cmp-workfront-dashboard-config"
+         style="border:1px dashed #ccc; padding:1rem; font-family:sans-serif;">
+        <h3 style="margin-top:0;">Workfront Dashboard CSV Export</h3>
+
+        <sly data-sly-test="${!model.configured}">
+            <p><em>No content trees configured yet. Open the dialog to add one or more content trees to export.</em></p>
+        </sly>
+
+        <table data-sly-test="${model.configured}"
+               style="border-collapse:collapse; width:100%;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">Content Tree Path</th>
+                    <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">CSV File Name</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-sly-repeat.tree="${model.contentTrees}">
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${tree.contentTreePath}</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${tree.csvName}.csv</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</sly>

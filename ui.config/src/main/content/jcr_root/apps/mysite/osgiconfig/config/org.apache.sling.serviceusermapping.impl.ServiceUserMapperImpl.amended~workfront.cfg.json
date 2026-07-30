@@ -1,0 +1,5 @@
+{
+    "user.mapping": [
+        "com.mysite.mysite.core:workfront-csv-write=workfront-csv-service"
+    ]
+}
