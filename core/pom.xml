@@ -62,6 +62,12 @@ Import-Package: javax.annotation;version=0.0.0,*
                             <bnd><![CDATA[
 Bundle-SymbolicName: ${project.groupId}.${project.artifactId}
 
+Export-Package: \
+  com.mysite.core.models,\
+  com.mysite.core.models.report,\
+  com.mysite.core.models.workfront,\
+  com.mysite.core.services
+
 Import-Package: org.apache.commons.lang3.*;version="[3,4)",*
                 ]]></bnd>
                         </configuration>
