@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:cq="http://www.day.com/jcr/cq/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+          xmlns:nt="http://www.jcp.org/jcr/nt/1.0"
+          jcr:primaryType="cq:Page">
+    <jcr:content
+            jcr:primaryType="cq:PageContent"
+            jcr:title="MySite Batch Publish"
+            sling:resourceType="cq/workflow/components/pages/model"
+            cq:lastModified="{Date}2026-07-30T00:00:00.000+00:00">
+        <flow jcr:primaryType="nt:unstructured">
+            <nodes jcr:primaryType="nt:unstructured">
+                <node0 jcr:primaryType="nt:unstructured"
+                       jcr:title="Start"
+                       type="START"/>
+                <node1 jcr:primaryType="nt:unstructured"
+                       jcr:title="MySite Batch Publish"
+                       type="PROCESS">
+                    <metaData jcr:primaryType="nt:unstructured"
+                              PROCESS="MySite Batch Publish"
+                              PROCESS_AUTO_ADVANCE="true"/>
+                </node1>
+                <node2 jcr:primaryType="nt:unstructured"
+                       jcr:title="End"
+                       type="END"/>
+            </nodes>
+            <transitions jcr:primaryType="nt:unstructured">
+                <transition0 jcr:primaryType="nt:unstructured"
+                             from="node0"
+                             to="node1"/>
+                <transition1 jcr:primaryType="nt:unstructured"
+                             from="node1"
+                             to="node2"/>
+            </transitions>
+        </flow>
+        <metaData jcr:primaryType="nt:unstructured"
+                  multiResourceSupport="true"/>
+    </jcr:content>
+</jcr:root>

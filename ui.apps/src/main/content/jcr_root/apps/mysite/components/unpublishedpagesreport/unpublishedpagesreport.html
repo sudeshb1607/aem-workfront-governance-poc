@@ -1,0 +1,74 @@
+<!--/* Unpublished Pages Report - author summary (edit mode only) */-->
+<sly data-sly-use.model="com.mysite.core.models.UnpublishedReportConfigModel"
+     data-sly-test.isEdit="${wcmmode.edit || wcmmode.preview}"></sly>
+
+<sly data-sly-test="${isEdit}">
+    <div class="cmp-unpublished-pages-report"
+         style="border:1px dashed #ccc; padding:1rem; font-family:sans-serif;">
+        <h3 style="margin-top:0;">Unpublished Pages Report</h3>
+
+        <sly data-sly-test="${!model.configured}">
+            <p><em>Not configured yet &mdash; the summary below reflects built-in defaults. Open the dialog to customise.</em></p>
+        </sly>
+
+        <table style="border-collapse:collapse; width:100%; margin-bottom:1rem;">
+            <tbody>
+                <tr>
+                    <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Scan Roots</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">
+                        <sly data-sly-list.root="${model.config.scanRoots}">${root}<sly data-sly-test="${rootList.last != true}">, </sly></sly>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Exclude Paths</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">
+                        <sly data-sly-list.ex="${model.config.excludePaths}">${ex}<sly data-sly-test="${exList.last != true}">, </sly></sly>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Exclude Properties</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">
+                        <sly data-sly-list.prop="${model.config.excludeProps}">${prop.name}=${prop.value}<sly data-sly-test="${propList.last != true}">, </sly></sly>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Not-published Threshold</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${model.config.thresholdDays} day(s)</td>
+                </tr>
+                <tr>
+                    <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">CSV Output</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${model.config.outputFolder}/${model.config.fileName}-&lt;date&gt;.csv
+                        <sly data-sly-test="${model.config.activateCsv}"> (activated)</sly></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <table style="border-collapse:collapse; width:100%;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">Column Header</th>
+                    <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">Source</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-sly-repeat.col="${model.config.columns}">
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${col.header}</td>
+                    <td style="padding:4px; border-bottom:1px solid #eee;">${col.source}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="margin-top:1rem;">
+            <button type="button" class="cmp-unpublished-pages-report__run"
+                    data-config-path="${model.componentPath @ context='attribute'}"
+                    onclick="(function(b){b.disabled=true;b.textContent='Generating…';
+                        var d=new FormData();d.append('configPath',b.getAttribute('data-config-path'));
+                        fetch('/bin/mysite/unpublishedreport',{method:'POST',body:d,credentials:'same-origin'})
+                        .then(function(r){return r.json();})
+                        .then(function(j){b.disabled=false;b.textContent='Generate now';
+                            window.alert(j.success?('Report generated: '+j.csvPath+' ('+j.rowsReported+' row(s))'):('Failed: '+j.error));})
+                        .catch(function(e){b.disabled=false;b.textContent='Generate now';window.alert('Request failed: '+e);});
+                    })(this)">Generate now</button>
+        </div>
+    </div>
+</sly>

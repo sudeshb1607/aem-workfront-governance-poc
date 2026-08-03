@@ -49,6 +49,7 @@ import com.day.cq.search.result.Hit;
 import com.day.cq.search.result.SearchResult;
 import com.mysite.core.models.workfront.ContentTreeConfig;
 import com.mysite.core.services.WorkfrontCsvGeneratorService;
+import com.mysite.core.util.PageHashUtil;
 
 /**
  * Default implementation of {@link WorkfrontCsvGeneratorService}.
@@ -74,8 +75,9 @@ public class WorkfrontCsvGeneratorServiceImpl implements WorkfrontCsvGeneratorSe
 
     private static final String CSV_MIME_TYPE = "text/csv";
     private static final String CSV_EXTENSION = ".csv";
-    private static final String CSV_HEADER = "Title,Path,Last Modified,Template";
+    private static final String CSV_HEADER = "Hash,Title,Path,Last Modified,Template";
     private static final String NEWLINE = "\r\n";
+    private static final String HTML_EXTENSION = ".html";
 
     @ObjectClassDefinition(
             name = "Workfront CSV Generator Service",
@@ -203,8 +205,11 @@ public class WorkfrontCsvGeneratorServiceImpl implements WorkfrontCsvGeneratorSe
         final String path = pageResource.getPath();
         final String lastModified = vm.get("cq:lastModified", "");
         final String template = vm.get("cq:template", "");
+        // Unique, stable per-page identifier derived from the page URL.
+        final String hash = PageHashUtil.hash(path + HTML_EXTENSION);
 
-        csv.append(escape(title)).append(',')
+        csv.append(escape(hash)).append(',')
+                .append(escape(title)).append(',')
                 .append(escape(path)).append(',')
                 .append(escape(lastModified)).append(',')
                 .append(escape(template)).append(NEWLINE);

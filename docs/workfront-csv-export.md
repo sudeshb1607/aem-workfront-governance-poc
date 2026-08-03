@@ -145,11 +145,12 @@ CSV is RFC 4180 compliant (fields containing `,`, `"`, or newlines are quoted). 
 `cq:Page` under each configured tree:
 
 ```
-Title,Path,Last Modified,Template
-Homepage,/content/mysite/us/en,2026-07-30T10:15:00.000+02:00,/conf/mysite/settings/wcm/templates/page-content
+Hash,Title,Path,Last Modified,Template
+0b1c...e9,Homepage,/content/mysite/us/en,2026-07-30T10:15:00.000+02:00,/conf/mysite/settings/wcm/templates/page-content
 ```
 
-Columns are read from the page's `jcr:content`: `jcr:title` (falls back to node name),
+Columns are read from the page's `jcr:content`: a **Hash** (unique, stable SHA-256 of the page
+URL `path + ".html"`, usable as a per-page identifier), `jcr:title` (falls back to node name),
 page path, `cq:lastModified`, `cq:template`.
 
 The export includes the **root page** of each configured tree **and** all descendant pages

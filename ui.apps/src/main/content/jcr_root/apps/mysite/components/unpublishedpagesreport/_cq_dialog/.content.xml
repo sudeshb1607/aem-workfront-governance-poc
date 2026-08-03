@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:cq="http://www.day.com/jcr/cq/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+          xmlns:nt="http://www.jcp.org/jcr/nt/1.0"
+    jcr:primaryType="nt:unstructured"
+    jcr:title="Unpublished Pages Report"
+    sling:resourceType="cq/gui/components/authoring/dialog">
+    <content
+        jcr:primaryType="nt:unstructured"
+        sling:resourceType="granite/ui/components/coral/foundation/container">
+        <items jcr:primaryType="nt:unstructured">
+            <tabs
+                jcr:primaryType="nt:unstructured"
+                sling:resourceType="granite/ui/components/coral/foundation/tabs"
+                maximized="{Boolean}true">
+                <items jcr:primaryType="nt:unstructured">
+                    <scope
+                        jcr:primaryType="nt:unstructured"
+                        jcr:title="Scope"
+                        sling:resourceType="granite/ui/components/coral/foundation/container"
+                        margin="{Boolean}true">
+                        <items jcr:primaryType="nt:unstructured">
+                            <scanRoots
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldDescription="Content roots to scan for pages. Defaults to /content when left empty."
+                                fieldLabel="Scan Roots">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/form/pathfield"
+                                    fieldLabel="Scan Root"
+                                    name="./scanRoots"
+                                    rootPath="/content"/>
+                            </scanRoots>
+                            <excludePaths
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldDescription="Path prefixes to exclude from the report (e.g. /content/test)."
+                                fieldLabel="Exclude Paths">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/form/pathfield"
+                                    fieldLabel="Exclude Path"
+                                    name="./excludePaths"
+                                    rootPath="/content"/>
+                            </excludePaths>
+                            <excludeProps
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldDescription="Exclude any page whose property equals the given value (checked on jcr:content then page node)."
+                                fieldLabel="Exclude-property Conditions"
+                                composite="{Boolean}true">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/container"
+                                    name="./excludeProps">
+                                    <items jcr:primaryType="nt:unstructured">
+                                        <propertyName
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldDescription="Property name to test (e.g. excludeFromDelete)."
+                                            fieldLabel="Property Name"
+                                            name="./propertyName"/>
+                                        <propertyValue
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldDescription="Value that, when matched, excludes the page (e.g. true)."
+                                            fieldLabel="Property Value"
+                                            name="./propertyValue"/>
+                                    </items>
+                                </field>
+                            </excludeProps>
+                        </items>
+                    </scope>
+                    <rule
+                        jcr:primaryType="nt:unstructured"
+                        jcr:title="Rule"
+                        sling:resourceType="granite/ui/components/coral/foundation/container"
+                        margin="{Boolean}true">
+                        <items jcr:primaryType="nt:unstructured">
+                            <thresholdDays
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/numberfield"
+                                fieldDescription="Report pages never published, or last activated more than this many days ago."
+                                fieldLabel="Not-published Threshold (days)"
+                                name="./thresholdDays"
+                                min="{Long}1"
+                                value="90"/>
+                        </items>
+                    </rule>
+                    <output
+                        jcr:primaryType="nt:unstructured"
+                        jcr:title="Output"
+                        sling:resourceType="granite/ui/components/coral/foundation/container"
+                        margin="{Boolean}true">
+                        <items jcr:primaryType="nt:unstructured">
+                            <outputFolder
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/pathfield"
+                                fieldDescription="DAM folder the CSV is written into. A date suffix is appended to the file name."
+                                fieldLabel="CSV Output Folder"
+                                name="./outputFolder"
+                                rootPath="/content/dam"
+                                value="/content/dam/mysite/reports"/>
+                            <fileName
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                fieldDescription="CSV base file name without extension. The generation date is appended."
+                                fieldLabel="CSV Base File Name"
+                                name="./fileName"
+                                value="unpublished-pages"/>
+                            <activateCsv
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/checkbox"
+                                text="Activate CSV after generation"
+                                name="./activateCsv"
+                                value="true"
+                                checked="{Boolean}true"
+                                uncheckedValue="false"/>
+                            <activateCsvDefault
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/hidden"
+                                name="./activateCsv@DefaultValue"
+                                value="false"/>
+                            <activateCsvUseDefault
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/hidden"
+                                name="./activateCsv@UseDefaultWhenMissing"
+                                value="{Boolean}true"/>
+                        </items>
+                    </output>
+                    <columns
+                        jcr:primaryType="nt:unstructured"
+                        jcr:title="Columns"
+                        sling:resourceType="granite/ui/components/coral/foundation/container"
+                        margin="{Boolean}true">
+                        <items jcr:primaryType="nt:unstructured">
+                            <columns
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldDescription="CSV columns. Source is a jcr:content property (e.g. cq:lastReplicated) or a token: :title, :path, :url, :hash. Defaults to a standard set when empty."
+                                fieldLabel="Columns"
+                                composite="{Boolean}true">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/container"
+                                    name="./columns">
+                                    <items jcr:primaryType="nt:unstructured">
+                                        <header
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldDescription="CSV column heading."
+                                            fieldLabel="Header"
+                                            name="./header"/>
+                                        <source
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldDescription="jcr:content property name, or a token: :title, :path, :url, :hash."
+                                            fieldLabel="Source"
+                                            name="./source"/>
+                                    </items>
+                                </field>
+                            </columns>
+                        </items>
+                    </columns>
+                </items>
+            </tabs>
+        </items>
+    </content>
+</jcr:root>

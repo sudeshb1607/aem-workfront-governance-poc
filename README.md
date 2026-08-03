@@ -121,6 +121,9 @@ A ClientLib will consist of the following files and directories:
 - [Workfront Dashboard CSV Export](docs/workfront-csv-export.md) — scheduled export of page
   metadata (Title, Path, Last Modified, Template) to CSV files in the DAM for Workfront dashboards.
   Batched traversal handles content trees of up to ~10,000 pages per CSV.
+- [Unpublished Pages Report](docs/unpublished-pages-report.md) — monthly, author-configurable CSV
+  report of pages not published within a threshold window (default 90 days), written to the DAM and
+  activated. Scan roots, excludes, threshold, output, and columns are all set via the component dialog.
 
 ## Maven settings
 

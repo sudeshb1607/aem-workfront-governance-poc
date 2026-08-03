@@ -1,0 +1,64 @@
+.mysite-batchworkflow-scope {
+    display: block;
+}
+
+/* Off-screen (but not display:none, so foundation still validates it) guard field
+   that drives the "at least one selected" rule on the wizard's Create button. */
+.mysite-batchworkflow-guard {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    width: 1px;
+    height: 1px;
+}
+
+.mysite-scope {
+    border-top: 1px solid var(--coral-alias-line-color, #e1e1e1);
+}
+
+.mysite-scope-row {
+    display: flex;
+    align-items: center;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--coral-alias-line-color, #e1e1e1);
+}
+
+.mysite-scope-header {
+    background: var(--coral-alias-background-color-key, #f5f5f5);
+    font-weight: 700;
+}
+
+.mysite-scope-check {
+    flex: 0 0 3rem;
+    display: flex;
+    align-items: center;
+}
+
+/* Contain the Coral checkbox's absolutely-positioned <input>; without this the
+   input expands to fill the container and overlapping hit-areas swallow clicks. */
+.mysite-batchworkflow-scope coral-checkbox {
+    position: relative;
+    display: inline-block;
+}
+
+.mysite-scope-title {
+    flex: 0 0 40%;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 1rem;
+}
+
+.mysite-scope-header .mysite-scope-title,
+.mysite-scope-header .mysite-scope-path {
+    font-weight: 700;
+}
+
+.mysite-scope-path {
+    flex: 1;
+    color: var(--coral-alias-text-color-quiet, #6e6e6e);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

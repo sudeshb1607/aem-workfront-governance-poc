@@ -22,6 +22,7 @@ import java.util.List;
 import javax.annotation.PostConstruct;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.sling.api.SlingHttpServletRequest;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ValueMap;
 import org.apache.sling.models.annotations.Model;
@@ -41,7 +42,7 @@ import com.mysite.core.models.workfront.WorkfrontConfigConstants;
  * author entry never breaks the export.
  */
 @Model(
-        adaptables = Resource.class,
+        adaptables = {SlingHttpServletRequest.class, Resource.class},
         adapters = WorkfrontDashboardConfigModel.class)
 public class WorkfrontDashboardConfigModelImpl implements WorkfrontDashboardConfigModel {
 

@@ -62,8 +62,6 @@ Import-Package: javax.annotation;version=0.0.0,*
                             <bnd><![CDATA[
 Bundle-SymbolicName: ${project.groupId}.${project.artifactId}
 
-Export-Package: com.mysite.core, com.mysite.core.models
-
 Import-Package: org.apache.commons.lang3.*;version="[3,4)",*
                 ]]></bnd>
                         </configuration>
@@ -170,6 +168,14 @@ Import-Package: org.apache.commons.lang3.*;version="[3,4)",*
             <groupId>org.apache.sling</groupId>
             <artifactId>org.apache.sling.models.impl</artifactId>
             <version>1.4.14</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JSON-P (javax.json 1.1) provider so servlets using javax.json can run under test.
+             The API itself comes from the uber-jar (provided). -->
+        <dependency>
+            <groupId>org.apache.johnzon</groupId>
+            <artifactId>johnzon-core</artifactId>
+            <version>1.1.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

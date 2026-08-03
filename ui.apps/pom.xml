@@ -62,6 +62,15 @@
                     </repositoryStructurePackages>
                     <dependencies>
                     </dependencies>
+                    <validatorsSettings>
+                        <!-- Assets action-bar overlay lives under an OOTB jcr:content path;
+                             declare that ancestor so the filter validator accepts the overlay. -->
+                        <jackrabbit-filter>
+                            <options>
+                                <validRoots>/,/libs,/apps,/etc,/var,/tmp,/content,/conf,/home,/apps/dam/gui/content/assets/jcr:content/actions</validRoots>
+                            </options>
+                        </jackrabbit-filter>
+                    </validatorsSettings>
                 </configuration>
             </plugin>
             <plugin>

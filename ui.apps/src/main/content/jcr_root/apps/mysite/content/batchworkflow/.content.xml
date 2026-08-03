@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:granite="http://www.adobe.com/jcr/granite/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+          xmlns:nt="http://www.jcp.org/jcr/nt/1.0"
+          jcr:primaryType="nt:unstructured"
+          jcr:title="Create Workflow"
+          sling:resourceType="granite/ui/components/coral/foundation/page">
+    <head jcr:primaryType="nt:unstructured">
+        <viewport jcr:primaryType="nt:unstructured"
+                  sling:resourceType="granite/ui/components/coral/foundation/admin/page/viewport"/>
+        <clientlibs jcr:primaryType="nt:unstructured"
+                    sling:resourceType="granite/ui/components/coral/foundation/includeclientlibs"
+                    categories="[coralui3,granite.ui.coral.foundation,granite.ui.shell,mysite.batchworkflow]"/>
+    </head>
+    <body jcr:primaryType="nt:unstructured"
+          sling:resourceType="granite/ui/components/coral/foundation/page/body">
+        <items jcr:primaryType="nt:unstructured">
+            <form jcr:primaryType="nt:unstructured"
+                  sling:resourceType="granite/ui/components/coral/foundation/form"
+                  granite:class="mysite-batchworkflow-form foundation-form"
+                  action="/bin/mysite/batchworkflow"
+                  foundationForm="{Boolean}true"
+                  maximized="{Boolean}true"
+                  method="post"
+                  novalidate="{Boolean}true"
+                  style="vertical">
+                <granite:data jcr:primaryType="nt:unstructured"
+                              foundation-form-ajax="true"
+                              foundation-form-response-type="none"/>
+                <items jcr:primaryType="nt:unstructured">
+                    <wizard jcr:primaryType="nt:unstructured"
+                            sling:resourceType="granite/ui/components/coral/foundation/wizard">
+                        <items jcr:primaryType="nt:unstructured">
+                            <properties jcr:primaryType="nt:unstructured"
+                                        jcr:title="Properties"
+                                        sling:resourceType="granite/ui/components/coral/foundation/container">
+                                <items jcr:primaryType="nt:unstructured">
+                                    <fixedColumnContainer jcr:primaryType="nt:unstructured"
+                                                          sling:resourceType="granite/ui/components/coral/foundation/fixedcolumns">
+                                        <items jcr:primaryType="nt:unstructured">
+                                            <fixedColumn jcr:primaryType="nt:unstructured"
+                                                         sling:resourceType="granite/ui/components/coral/foundation/container">
+                                                <items jcr:primaryType="nt:unstructured">
+                                                    <model jcr:primaryType="nt:unstructured"
+                                                           sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                                                           fieldLabel="Workflow Model"
+                                                           name="model"
+                                                           required="{Boolean}true">
+                                                        <datasource jcr:primaryType="nt:unstructured"
+                                                                    sling:resourceType="mysite/gui/batchworkflow/models"/>
+                                                    </model>
+                                                    <workflowTitle jcr:primaryType="nt:unstructured"
+                                                                   sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                                                   fieldLabel="Workflow Title"
+                                                                   name="workflowTitle"/>
+                                                </items>
+                                            </fixedColumn>
+                                        </items>
+                                    </fixedColumnContainer>
+                                </items>
+                                <parentConfig jcr:primaryType="nt:unstructured">
+                                    <next jcr:primaryType="nt:unstructured"
+                                          sling:resourceType="granite/ui/components/coral/foundation/button"
+                                          granite:class="foundation-wizard-control"
+                                          text="Next"
+                                          variant="primary">
+                                        <granite:data jcr:primaryType="nt:unstructured"
+                                                      foundation-wizard-control-action="next"/>
+                                    </next>
+                                </parentConfig>
+                            </properties>
+                            <scope jcr:primaryType="nt:unstructured"
+                                   jcr:title="Scope"
+                                   maximized="{Boolean}true"
+                                   sling:resourceType="granite/ui/components/coral/foundation/container">
+                                <items jcr:primaryType="nt:unstructured">
+                                    <selectionGuard jcr:primaryType="nt:unstructured"
+                                                    sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                                    granite:class="mysite-batchworkflow-guard"
+                                                    name="_selectionGuard"/>
+                                    <list jcr:primaryType="nt:unstructured"
+                                          sling:resourceType="granite/ui/components/coral/foundation/container"
+                                          granite:class="mysite-batchworkflow-scope"/>
+                                </items>
+                                <parentConfig jcr:primaryType="nt:unstructured">
+                                    <next jcr:primaryType="nt:unstructured"
+                                          sling:resourceType="granite/ui/components/coral/foundation/button"
+                                          granite:class="foundation-wizard-control mysite-batchworkflow-submit"
+                                          text="Create"
+                                          type="submit"
+                                          variant="primary">
+                                        <granite:data jcr:primaryType="nt:unstructured"
+                                                      foundation-wizard-control-action="next"/>
+                                    </next>
+                                </parentConfig>
+                            </scope>
+                        </items>
+                    </wizard>
+                </items>
+            </form>
+        </items>
+    </body>
+</jcr:root>

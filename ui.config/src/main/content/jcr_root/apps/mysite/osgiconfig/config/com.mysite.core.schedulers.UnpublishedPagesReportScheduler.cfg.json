@@ -1,0 +1,6 @@
+{
+    "scheduler.expression": "0 0 2 1 * ?",
+    "scheduler.concurrent": false,
+    "searchRoot": "/content",
+    "pauseBetweenConfigsSeconds": 5
+}
