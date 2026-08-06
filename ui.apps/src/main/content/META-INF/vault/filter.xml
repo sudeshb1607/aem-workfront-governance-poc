@@ -3,6 +3,7 @@
     <filter root="/apps/mysite/clientlibs"/>
     <filter root="/apps/mysite/components"/>
     <filter root="/apps/mysite/content"/>
+    <filter root="/apps/mysite/datasource"/>
     <filter root="/apps/mysite/i18n"/>
     <filter root="/apps/mysite/workflow"/>
     <filter root="/apps/dam/gui/content/assets/jcr:content/actions/selection" mode="update"/>

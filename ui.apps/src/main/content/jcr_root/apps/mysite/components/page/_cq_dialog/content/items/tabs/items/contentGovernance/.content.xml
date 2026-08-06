@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:cq="http://www.day.com/jcr/cq/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+          xmlns:nt="http://www.jcp.org/jcr/nt/1.0"
+    jcr:primaryType="nt:unstructured"
+    jcr:title="Content Governance"
+    sling:resourceType="granite/ui/components/coral/foundation/container"
+    margin="{Boolean}true">
+    <items jcr:primaryType="nt:unstructured">
+        <columns
+            jcr:primaryType="nt:unstructured"
+            sling:resourceType="granite/ui/components/coral/foundation/fixedcolumns"
+            margin="{Boolean}false">
+            <items jcr:primaryType="nt:unstructured">
+                <column
+                    jcr:primaryType="nt:unstructured"
+                    sling:resourceType="granite/ui/components/coral/foundation/container">
+                    <items jcr:primaryType="nt:unstructured">
+                        <franchise
+                            jcr:primaryType="nt:unstructured"
+                            sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                            fieldLabel="Franchise"
+                            name="./franchise"
+                            required="{Boolean}true"
+                            emptyText="Select franchise">
+                            <datasource
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="mysite/datasource/content-governance-franchise"/>
+                        </franchise>
+                        <pageOwners
+                            jcr:primaryType="nt:unstructured"
+                            sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                            fieldLabel="Page Owners"
+                            name="./pageOwners"
+                            required="{Boolean}true"
+                            emptyText="Select page owner">
+                            <datasource
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="mysite/datasource/content-governance-page-owners"/>
+                        </pageOwners>
+                        <tagType
+                            jcr:primaryType="nt:unstructured"
+                            sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                            fieldLabel="Tag Type"
+                            fieldDescription="Select the FPA approval classification for this page."
+                            name="./tagType"
+                            required="{Boolean}true"
+                            emptyText="Select tag type">
+                            <items jcr:primaryType="nt:unstructured">
+                                <fpaNotRequired
+                                    jcr:primaryType="nt:unstructured"
+                                    text="FPA approval – not required"
+                                    value="fpa-not-required"/>
+                                <fpaRequired
+                                    jcr:primaryType="nt:unstructured"
+                                    text="FPA approval – required"
+                                    value="fpa-required"/>
+                                <fpaPending
+                                    jcr:primaryType="nt:unstructured"
+                                    text="FPA approval – pending"
+                                    value="fpa-pending"/>
+                                <fpaApproved
+                                    jcr:primaryType="nt:unstructured"
+                                    text="FPA approval – approved"
+                                    value="fpa-approved"/>
+                            </items>
+                        </tagType>
+                        <contentReviewExpiryDate
+                            jcr:primaryType="nt:unstructured"
+                            sling:resourceType="granite/ui/components/coral/foundation/form/datepicker"
+                            fieldLabel="Content Review Expiry Date"
+                            fieldDescription="Date when this page's content must next be reviewed for accuracy."
+                            name="./contentReviewExpiryDate"
+                            required="{Boolean}true"
+                            type="date"
+                            displayedFormat="DD/MM/YYYY"
+                            valueFormat="YYYY-MM-DD"/>
+                    </items>
+                </column>
+            </items>
+        </columns>
+    </items>
+</jcr:root>

@@ -78,6 +78,9 @@
                         text="lalala :)"/>
                 </container>
             </container>
+            <content-governance-config
+                jcr:primaryType="nt:unstructured"
+                sling:resourceType="mysite/components/content-governance-config"/>
         </root>
     </jcr:content>
 </jcr:root>

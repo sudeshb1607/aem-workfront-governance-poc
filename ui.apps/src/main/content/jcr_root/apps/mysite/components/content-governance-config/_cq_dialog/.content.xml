@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:cq="http://www.day.com/jcr/cq/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+          xmlns:nt="http://www.jcp.org/jcr/nt/1.0"
+    jcr:primaryType="nt:unstructured"
+    jcr:title="Content Governance Configuration"
+    sling:resourceType="cq/gui/components/authoring/dialog">
+    <content
+        jcr:primaryType="nt:unstructured"
+        sling:resourceType="granite/ui/components/coral/foundation/container">
+        <items jcr:primaryType="nt:unstructured">
+            <tabs
+                jcr:primaryType="nt:unstructured"
+                sling:resourceType="granite/ui/components/coral/foundation/tabs"
+                maximized="{Boolean}true">
+                <items jcr:primaryType="nt:unstructured">
+                    <options
+                        jcr:primaryType="nt:unstructured"
+                        jcr:title="Options"
+                        sling:resourceType="granite/ui/components/coral/foundation/container"
+                        margin="{Boolean}true">
+                        <items jcr:primaryType="nt:unstructured">
+                            <franchiseOptions
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldLabel="Franchise Options"
+                                fieldDescription="The Key is stored in page properties; the Label is shown to authors in the dropdown."
+                                composite="{Boolean}true">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/container"
+                                    name="./franchiseOptions">
+                                    <items jcr:primaryType="nt:unstructured">
+                                        <key
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldLabel="Key"
+                                            emptyText="e.g. retail"
+                                            name="./key"
+                                            required="{Boolean}true"/>
+                                        <label
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldLabel="Label"
+                                            emptyText="e.g. Retail"
+                                            name="./label"
+                                            required="{Boolean}true"/>
+                                    </items>
+                                </field>
+                            </franchiseOptions>
+                            <pageOwnerOptions
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
+                                fieldLabel="Page Owner Options"
+                                fieldDescription="The Key is stored in page properties; the Label is shown to authors in the dropdown."
+                                composite="{Boolean}true">
+                                <field
+                                    jcr:primaryType="nt:unstructured"
+                                    sling:resourceType="granite/ui/components/coral/foundation/container"
+                                    name="./pageOwnerOptions">
+                                    <items jcr:primaryType="nt:unstructured">
+                                        <key
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldLabel="Key"
+                                            emptyText="e.g. borrow-money"
+                                            name="./key"
+                                            required="{Boolean}true"/>
+                                        <label
+                                            jcr:primaryType="nt:unstructured"
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                            fieldLabel="Label"
+                                            emptyText="e.g. Borrow and Manage Borrow Money"
+                                            name="./label"
+                                            required="{Boolean}true"/>
+                                    </items>
+                                </field>
+                            </pageOwnerOptions>
+                        </items>
+                    </options>
+                </items>
+            </tabs>
+        </items>
+    </content>
+</jcr:root>
