@@ -1,0 +1,2 @@
+#base=js
+content-governance.js

@@ -28,26 +28,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Granite UI DataSource that populates the Franchise and Page Owner select
- * fields in the Content Governance page-properties tab.
- *
- * Two resource types are registered — one per field — so the servlet can
- * determine which multifield to read purely from the request resource type,
- * avoiding any ambiguity when Granite UI dispatches the datasource request:
+ * Granite UI DataSource that populates the Franchise select field in the
+ * Content Governance page-properties tab.
  *
  *   mysite/datasource/content-governance-franchise  → franchiseOptions nodes
- *   mysite/datasource/content-governance-page-owners → pageOwnerOptions nodes
  *
  * Options are authored on the {@code content-governance-config} component
  * (mysite/components/content-governance-config) placed anywhere under the
  * site root. Each composite multifield row has a {@code key} (stored in page
  * properties on save) and a {@code label} (displayed to authors).
+ *
+ * Page Owners are now scoped per Franchise (a nested multifield under each
+ * franchiseOptions row) and are served dynamically by
+ * {@link ContentGovernancePageOwnersServlet}. The {@code deriveSiteRoot} and
+ * {@code findConfigComponent} helpers are {@code static} so that servlet can
+ * reuse them without duplication.
  */
 @Component(
         service = Servlet.class,
         property = {
                 "sling.servlet.resourceTypes=mysite/datasource/content-governance-franchise",
-                "sling.servlet.resourceTypes=mysite/datasource/content-governance-page-owners",
                 "sling.servlet.methods=GET"
         }
 )
@@ -56,9 +56,7 @@ public class ContentGovernanceOptionsDataSourceServlet extends SlingSafeMethodsS
     private static final Logger LOG = LoggerFactory.getLogger(ContentGovernanceOptionsDataSourceServlet.class);
 
     private static final String CONFIG_RESOURCE_TYPE       = "mysite/components/content-governance-config";
-    private static final String RT_FRANCHISE               = "mysite/datasource/content-governance-franchise";
     private static final String PN_FRANCHISE_OPTIONS       = "franchiseOptions";
-    private static final String PN_PAGE_OWNER_OPTIONS      = "pageOwnerOptions";
 
     @Override
     protected void doGet(SlingHttpServletRequest request, SlingHttpServletResponse response) {
@@ -66,14 +64,6 @@ public class ContentGovernanceOptionsDataSourceServlet extends SlingSafeMethodsS
         final List<Resource> entries    = new ArrayList<>();
 
         try {
-            // Determine which multifield to read based on which resource type was matched.
-            final String resourceType     = request.getResource().getResourceType();
-            final String multifieldName   = RT_FRANCHISE.equals(resourceType)
-                    ? PN_FRANCHISE_OPTIONS : PN_PAGE_OWNER_OPTIONS;
-
-            LOG.debug("ContentGovernance datasource: resourceType={}, multifieldName={}",
-                    resourceType, multifieldName);
-
             // Page properties passes the edited page as the "item" query parameter.
             // Fall back to the suffix for other dialog contexts.
             String pagePath = request.getParameter("item");
@@ -86,7 +76,7 @@ public class ContentGovernanceOptionsDataSourceServlet extends SlingSafeMethodsS
                 final String siteRoot = deriveSiteRoot(pagePath);
                 final Resource configComponent = findConfigComponent(resolver, siteRoot);
                 if (configComponent != null) {
-                    buildEntries(resolver, configComponent, multifieldName, entries);
+                    buildEntries(resolver, configComponent, PN_FRANCHISE_OPTIONS, entries);
                 } else {
                     LOG.debug("No content-governance-config component found under {}", siteRoot);
                 }
@@ -102,7 +92,7 @@ public class ContentGovernanceOptionsDataSourceServlet extends SlingSafeMethodsS
      * Derives the site root as the first three path segments:
      * /content/mysite/us/en/some/page → /content/mysite/us
      */
-    private String deriveSiteRoot(String pagePath) {
+    static String deriveSiteRoot(String pagePath) {
         final String[] segments = pagePath.split("/");
         if (segments.length >= 4) {
             return "/" + segments[1] + "/" + segments[2] + "/" + segments[3];
@@ -114,7 +104,7 @@ public class ContentGovernanceOptionsDataSourceServlet extends SlingSafeMethodsS
      * Finds the first {@code content-governance-config} component anywhere under
      * {@code siteRoot} using a JCR SQL-2 query.
      */
-    private Resource findConfigComponent(ResourceResolver resolver, String siteRoot) {
+    static Resource findConfigComponent(ResourceResolver resolver, String siteRoot) {
         try {
             final Session session = resolver.adaptTo(Session.class);
             if (session == null) {
