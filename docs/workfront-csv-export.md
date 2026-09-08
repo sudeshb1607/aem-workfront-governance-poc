@@ -5,6 +5,9 @@ files into the DAM, for consumption by Workfront dashboards. Built for AEM 6.5 (
 self-healing, and observable via the AEM Inbox. Designed and validated to handle a content
 tree of **up to ~10,000 pages** per CSV (see [Scalability & performance](#7-scalability--performance)).
 
+> To convert these CSVs to JSON and push them to a Workfront Fusion webhook (HMAC-SHA256 signed),
+> see [Workfront Fusion — JSON conversion & signed webhook delivery](./workfront-json-webhook.md).
+
 ---
 
 ## 1. How it works

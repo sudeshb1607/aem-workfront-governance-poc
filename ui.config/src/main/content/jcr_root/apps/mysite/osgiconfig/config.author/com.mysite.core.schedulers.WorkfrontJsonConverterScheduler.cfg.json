@@ -1,0 +1,7 @@
+{
+    "scheduler.expression": "0 0 2 * * ?",
+    "scheduler.concurrent": false,
+    "maxAttempts": 3,
+    "retryBackoffSeconds": 5,
+    "pauseBetweenFilesSeconds": 5
+}

@@ -1,0 +1,8 @@
+{
+    "webhookUrl": "",
+    "webhookSecret": "",
+    "signatureHeader": "X-Workfront-Signature",
+    "datasetHeader": "X-Workfront-Dataset",
+    "connectTimeoutMs": 10000,
+    "readTimeoutMs": 30000
+}
