@@ -6,9 +6,11 @@
  * (.cg-page-owners, populated entirely here). Page Owners are scoped per
  * Franchise via a nested multifield on the content-governance-config component,
  * so this controller:
- *   1. On dialog load, fetches the owners for the saved Franchise and re-selects
+ *   1. Keeps Page Owners hidden until a Franchise is chosen; it appears once a
+ *      Franchise is selected and hides again if the Franchise is cleared.
+ *   2. On dialog load, fetches the owners for the saved Franchise and re-selects
  *      the saved owner if it still exists.
- *   2. On Franchise change, refetches owners, repopulates the select, clears the
+ *   3. On Franchise change, refetches owners, repopulates the select, clears the
  *      stale selection and re-triggers Granite validation.
  *
  * Endpoint: /bin/mysite/content-governance/page-owners.json?item=<path>&franchise=<key>
@@ -85,12 +87,30 @@
         $owners.trigger("change").trigger("foundation-field-change");
     }
 
+    // Show/hide the Page Owners field wrapper (label + control) so it only appears
+    // once a Franchise is chosen. Hidden Granite fields are skipped by validation,
+    // so the required Page Owners field won't block save while no Franchise is set.
+    function toggleOwners($owners, visible) {
+        var $wrapper = $owners.closest(".coral-Form-fieldwrapper");
+        if (!$wrapper.length) {
+            $wrapper = $owners;
+        }
+        $wrapper.toggleClass("hide", !visible);
+        if (!visible) {
+            $wrapper.hide();
+        } else {
+            $wrapper.show();
+        }
+    }
+
     function loadOwners($franchise, $owners, itemPath, selectedValue) {
         var franchise = selectValue($franchise[0]);
         if (!itemPath || !franchise) {
             populateOwners($owners, [], null);
+            toggleOwners($owners, false);
             return;
         }
+        toggleOwners($owners, true);
         $.getJSON(OWNERS_ENDPOINT, { item: itemPath, franchise: franchise })
             .done(function (owners) {
                 populateOwners($owners, owners || [], selectedValue);
@@ -99,6 +119,47 @@
                 populateOwners($owners, [], null);
             });
     }
+
+    // -----------------------------------------------------------------------
+    // Multifield "Add" scroll fix.
+    //
+    // Coral 3 composite/nested multifields call scrollIntoView() on the newly
+    // added item, which yanks the scrollable dialog body to the bottom every
+    // time the author clicks an "Add" button. Capture the scroll position of the
+    // affected scroll container(s) on the Add-click and restore it once Coral has
+    // finished inserting the row.
+    // -----------------------------------------------------------------------
+    function scrollParents(el) {
+        var parents = [];
+        var node = el ? el.parentElement : null;
+        while (node) {
+            var oy = window.getComputedStyle(node).overflowY;
+            if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
+                parents.push(node);
+            }
+            node = node.parentElement;
+        }
+        var docEl = document.scrollingElement || document.documentElement;
+        if (docEl && parents.indexOf(docEl) === -1) {
+            parents.push(docEl);
+        }
+        return parents;
+    }
+
+    $(document).on("click", "coral-multifield [coral-multifield-add], coral-multifield button[coral-multifield-add]", function () {
+        var targets = scrollParents(this).map(function (node) {
+            return { node: node, top: node.scrollTop };
+        });
+        function restore() {
+            targets.forEach(function (t) { t.node.scrollTop = t.top; });
+        }
+        // Restore across the frames where Coral inserts the row and focuses it.
+        window.requestAnimationFrame(function () {
+            restore();
+            window.requestAnimationFrame(restore);
+        });
+        window.setTimeout(restore, 0);
+    });
 
     $(document).on("foundation-contentloaded", function (e) {
         var $root = $(e.target);
@@ -115,6 +176,9 @@
         var itemPath = getItemPath();
         // The saved owner value is the select's initial value before we rebuild it.
         var savedOwner = selectValue($owners[0]);
+
+        // Hide up-front to avoid a flash; loadOwners re-shows it if a Franchise is set.
+        toggleOwners($owners, false);
 
         // Initial population from the saved franchise; re-select the saved owner.
         window.setTimeout(function () {
