@@ -3,6 +3,11 @@ package com.mysite.core.services.impl;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import com.day.cq.dam.api.AssetManager;
 import com.day.cq.replication.ReplicationActionType;
+import com.day.cq.replication.ReplicationStatus;
 import com.day.cq.replication.Replicator;
 import com.day.cq.search.PredicateGroup;
 import com.day.cq.search.Query;
@@ -60,7 +66,9 @@ public class WorkfrontCsvGeneratorServiceImpl implements WorkfrontCsvGeneratorSe
 
     private static final String CSV_MIME_TYPE = "text/csv";
     private static final String CSV_EXTENSION = ".csv";
-    private static final String CSV_HEADER = "Hash,Title,Path,Last Modified,Template";
+    private static final String CSV_HEADER =
+            "Hash,Title,Path,Brand,Last Modified,Modified By,Published,Next Review Date,"
+                    + "Days For Next Review,Franchise,Page Owners,Template";
     private static final String NEWLINE = "\r\n";
     private static final String HTML_EXTENSION = ".html";
 
@@ -188,7 +196,22 @@ public class WorkfrontCsvGeneratorServiceImpl implements WorkfrontCsvGeneratorSe
 
         final String title = vm.get("jcr:title", pageResource.getName());
         final String path = pageResource.getPath();
+        final String brand = brandName(path);
         final String lastModified = vm.get("cq:lastModified", "");
+        // Author who last modified the page (fall back to the JCR last-modifier).
+        final String modifiedBy = vm.get("cq:lastModifiedBy", vm.get("jcr:lastModifiedBy", ""));
+        // Published = the page is currently activated on the replication agent.
+        final ReplicationStatus replicationStatus =
+                content != null ? content.adaptTo(ReplicationStatus.class) : null;
+        final boolean published = replicationStatus != null && replicationStatus.isActivated();
+        // Content Governance tab fields.
+        final LocalDate reviewDate = reviewDate(vm);
+        final String nextReviewDate = reviewDate != null ? reviewDate.toString() : "";
+        // Days from today (scheduler run date) until the next review; negative when overdue.
+        final String daysForNextReview = reviewDate != null
+                ? Long.toString(ChronoUnit.DAYS.between(LocalDate.now(), reviewDate)) : "";
+        final String franchise = vm.get("franchise", "");
+        final String pageOwners = vm.get("pageOwners", "");
         final String template = vm.get("cq:template", "");
         // Unique, stable per-page identifier derived from the page URL.
         final String hash = PageHashUtil.hash(path + HTML_EXTENSION);
@@ -196,8 +219,60 @@ public class WorkfrontCsvGeneratorServiceImpl implements WorkfrontCsvGeneratorSe
         csv.append(escape(hash)).append(',')
                 .append(escape(title)).append(',')
                 .append(escape(path)).append(',')
+                .append(escape(brand)).append(',')
                 .append(escape(lastModified)).append(',')
+                .append(escape(modifiedBy)).append(',')
+                .append(published ? "True" : "False").append(',')
+                .append(escape(nextReviewDate)).append(',')
+                .append(escape(daysForNextReview)).append(',')
+                .append(escape(franchise)).append(',')
+                .append(escape(pageOwners)).append(',')
                 .append(escape(template)).append(NEWLINE);
+    }
+
+    /**
+     * Extracts the brand segment that follows {@code /content} in a page path,
+     * e.g. {@code /content/mysite/us/en/home} → {@code mysite}. Returns an empty
+     * string for paths that are not under {@code /content}.
+     */
+    private static String brandName(final String path) {
+        if (path == null) {
+            return "";
+        }
+        final String[] segments = path.split("/");
+        // segments[0]="" , segments[1]="content", segments[2]=brand
+        if (segments.length >= 3 && "content".equals(segments[1])) {
+            return segments[2];
+        }
+        return "";
+    }
+
+    /**
+     * Reads the Content Governance {@code contentReviewExpiryDate} as a
+     * {@link LocalDate}. The datepicker stores it as a JCR Date, so it is read as
+     * a {@link Calendar} first; string values ({@code YYYY-MM-DD} or an ISO
+     * offset datetime) are supported as fallbacks. Returns {@code null} when the
+     * property is absent or unparseable.
+     */
+    private static LocalDate reviewDate(final ValueMap vm) {
+        final Calendar cal = vm.get("contentReviewExpiryDate", Calendar.class);
+        if (cal != null) {
+            return cal.toInstant().atZone(cal.getTimeZone().toZoneId()).toLocalDate();
+        }
+        final String raw = StringUtils.trimToNull(vm.get("contentReviewExpiryDate", String.class));
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(raw);
+        } catch (final DateTimeParseException e) {
+            try {
+                return OffsetDateTime.parse(raw).toLocalDate();
+            } catch (final DateTimeParseException e2) {
+                LOG.warn("Unparseable contentReviewExpiryDate '{}'; leaving review columns blank", raw);
+                return null;
+            }
+        }
     }
 
     private void writeAsset(final ResourceResolver resolver, final String csvPath, final String csvContent)

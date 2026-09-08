@@ -1,6 +1,6 @@
 # Workfront Dashboard CSV Export
 
-Periodically exports AEM page metadata (**Title, Path, Last Modified, Template**) as CSV
+Periodically exports AEM page metadata (**Title, Path, Brand, Last Modified, Modified By, Published, Next Review Date, Days For Next Review, Franchise, Page Owners, Template**) as CSV
 files into the DAM, for consumption by Workfront dashboards. Built for AEM 6.5 (AMS),
 self-healing, and observable via the AEM Inbox. Designed and validated to handle a content
 tree of **up to ~10,000 pages** per CSV (see [Scalability & performance](#7-scalability--performance)).
@@ -145,13 +145,28 @@ CSV is RFC 4180 compliant (fields containing `,`, `"`, or newlines are quoted). 
 `cq:Page` under each configured tree:
 
 ```
-Hash,Title,Path,Last Modified,Template
-0b1c...e9,Homepage,/content/mysite/us/en,2026-07-30T10:15:00.000+02:00,/conf/mysite/settings/wcm/templates/page-content
+Hash,Title,Path,Brand,Last Modified,Modified By,Published,Next Review Date,Days For Next Review,Franchise,Page Owners,Template
+0b1c...e9,Homepage,/content/mysite/us/en,mysite,2026-07-30T10:15:00.000+02:00,jdoe,True,2026-12-31,114,retail,borrow,/conf/mysite/settings/wcm/templates/page-content
 ```
 
-Columns are read from the page's `jcr:content`: a **Hash** (unique, stable SHA-256 of the page
-URL `path + ".html"`, usable as a per-page identifier), `jcr:title` (falls back to node name),
-page path, `cq:lastModified`, `cq:template`.
+Columns are read from the page's `jcr:content` unless noted:
+
+| Column | Source |
+|---|---|
+| **Hash** | Unique, stable SHA-256 of the page URL `path + ".html"` — a per-page identifier |
+| **Title** | `jcr:title` (falls back to node name) |
+| **Path** | Page path |
+| **Brand** | Segment after `/content` in the path, e.g. `/content/mysite/us/en` → `mysite` |
+| **Last Modified** | `cq:lastModified` |
+| **Modified By** | `cq:lastModifiedBy` (falls back to `jcr:lastModifiedBy`) |
+| **Published** | `True`/`False` from the page's replication status (`ReplicationStatus.isActivated()`) |
+| **Next Review Date** | `contentReviewExpiryDate` (Content Governance tab) |
+| **Days For Next Review** | Whole days from the scheduler run date until **Next Review Date** — negative when overdue (e.g. `-10`); blank if no/invalid date |
+| **Franchise** | `franchise` (Content Governance tab) |
+| **Page Owners** | `pageOwners` (Content Governance tab) |
+| **Template** | `cq:template` |
+
+> Franchise and Page Owners are the stored **keys** (e.g. `retail`, `borrow`), not the display labels.
 
 The export includes the **root page** of each configured tree **and** all descendant pages
 (the QueryBuilder `path.self=true` option), so `/content/mysite/us` exports the `us` page plus
