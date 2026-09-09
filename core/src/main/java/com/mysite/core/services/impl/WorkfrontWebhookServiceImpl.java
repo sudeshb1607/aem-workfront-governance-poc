@@ -114,6 +114,20 @@ public class WorkfrontWebhookServiceImpl implements WorkfrontWebhookService {
             return SendResult.failure(0, "read failed: " + e.getMessage());
         }
 
+        return sendBody(dataset, body);
+    }
+
+    /**
+     * Signs the given body with HMAC-SHA256 and POSTs it. Package-private so the
+     * signing + HTTP path can be unit-tested with raw bytes (no DAM I/O). Refuses
+     * to send when the URL/secret is not configured.
+     */
+    SendResult sendBody(final String dataset, final byte[] body) {
+        if (StringUtils.isBlank(webhookUrl) || StringUtils.isEmpty(webhookSecret)) {
+            final String msg = "Webhook URL or secret not configured; refusing to send dataset '" + dataset + "'";
+            LOG.error(msg);
+            return SendResult.failure(0, msg);
+        }
         final String signature = "sha256=" + HmacUtil.sha256Hex(webhookSecret, body);
         return post(dataset, body, signature);
     }
@@ -131,18 +145,27 @@ public class WorkfrontWebhookServiceImpl implements WorkfrontWebhookService {
             conn.setRequestProperty(datasetHeader, dataset);
             conn.setFixedLengthStreamingMode(body.length);
 
+            // Full request dump (method, URL, headers, body) on a single line for readability.
+            LOG.info("Webhook request for dataset '{}': POST {} | Content-Type: application/json; charset=utf-8"
+                            + " | {}: {} | {}: {} | Body ({} bytes): {}",
+                    dataset, webhookUrl,
+                    signatureHeader, signature,
+                    datasetHeader, dataset,
+                    body.length, oneLine(new String(body, StandardCharsets.UTF_8)));
+
             try (OutputStream out = conn.getOutputStream()) {
                 out.write(body);
             }
 
             final int status = conn.getResponseCode();
+            final String responseBody = oneLine(readResponse(conn, status));
             if (status >= 200 && status < 300) {
-                LOG.info("Sent dataset '{}' ({} bytes) to webhook: HTTP {}", dataset, body.length, status);
+                LOG.info("Sent dataset '{}' ({} bytes) to webhook: HTTP {} | Response body: {}",
+                        dataset, body.length, status, responseBody);
                 return SendResult.success(status);
             }
-            final String detail = readError(conn);
-            LOG.warn("Webhook rejected dataset '{}': HTTP {} {}", dataset, status, detail);
-            return SendResult.failure(status, "HTTP " + status + (detail.isEmpty() ? "" : " - " + detail));
+            LOG.warn("Webhook rejected dataset '{}': HTTP {} | Response body: {}", dataset, status, responseBody);
+            return SendResult.failure(status, "HTTP " + status + (responseBody.isEmpty() ? "" : " - " + responseBody));
         } catch (final IOException e) {
             LOG.warn("Webhook send failed for dataset '{}': {}", dataset, e.getMessage());
             return SendResult.failure(0, e.getMessage());
@@ -176,19 +199,28 @@ public class WorkfrontWebhookServiceImpl implements WorkfrontWebhookService {
         }
     }
 
-    /** Reads a short snippet of the error stream for diagnostics (best-effort). */
-    private static String readError(final HttpURLConnection conn) {
-        try (InputStream err = conn.getErrorStream()) {
-            if (err == null) {
-                return "";
-            }
+    /** Collapses line breaks to single spaces so a value logs on one line. */
+    private static String oneLine(final String value) {
+        return value == null ? "" : value.replaceAll("[\\r\\n]+", " ").trim();
+    }
+
+    /** Reads the response body (success or error stream) for diagnostics (best-effort). */
+    private static String readResponse(final HttpURLConnection conn, final int status) {
+        final InputStream stream;
+        try {
+            stream = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
+        } catch (final IOException e) {
+            return "";
+        }
+        if (stream == null) {
+            return "";
+        }
+        try (InputStream in = stream) {
             final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            final byte[] buffer = new byte[2048];
+            final byte[] buffer = new byte[4096];
             int read;
-            int total = 0;
-            while ((read = err.read(buffer)) != -1 && total < 2048) {
+            while ((read = in.read(buffer)) != -1) {
                 bos.write(buffer, 0, read);
-                total += read;
             }
             return new String(bos.toByteArray(), StandardCharsets.UTF_8).trim();
         } catch (final IOException e) {

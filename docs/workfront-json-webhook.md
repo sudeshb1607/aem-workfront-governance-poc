@@ -155,11 +155,15 @@ from publish.
   anything still failing is retried on the **next scheduled run**.
 - **Never send unsigned:** missing URL/secret is an `ERROR` and the send is skipped.
 - **Logging levels** (`com.mysite.core.schedulers` / `com.mysite.core.services`):
-  - `INFO` — activate config summary; run start/finish; per-file success (dataset, record count / HTTP status); run summary counts.
+  - `INFO` — activate config summary; run start/finish; per-file success (dataset, record count / HTTP status);
+    the **full webhook request** (URL, headers, signature, body) and **full response** — each on a single line;
+    run summary counts.
   - `DEBUG` — parsed row counts, resolved paths.
   - `WARN` — malformed rows skipped; retryable attempt failures; missing folders; non-2xx webhook responses.
   - `ERROR` — final failure after retries; missing webhook URL/secret; unexpected run exceptions (with stack).
-  - The secret is never logged — only whether it is configured.
+  - The secret is never logged — only whether it is configured (the derived signature is logged).
+  - Request/response bodies are logged on a single line (embedded newlines collapsed to spaces), so a
+    multi-line/pretty-printed response is not split across log lines or shown with `_` newline placeholders.
 
 ---
 
@@ -175,5 +179,13 @@ from publish.
    `X-Workfront-Signature: sha256=<hex>`; recompute `HMAC-SHA256(secret, rawBody)` and confirm it matches.
 5. **Resilience:** point `webhookUrl` at a failing URL; confirm per-file isolation, `maxAttempts` retries
    with backoff, ERROR logs, and that other files still send; fix the URL and confirm the next run succeeds.
-6. `mvn -pl core test` runs the unit tests (`SimpleCsvParserTest`, `HmacUtilTest`,
-   `WorkfrontJsonConverterServiceImplTest`); the OSGi console shows the new services/schedulers `active`.
+6. `mvn -pl core test` runs the unit tests; the OSGi console shows the new services/schedulers `active`.
+
+### Unit tests
+
+| Test | Covers |
+|---|---|
+| `SimpleCsvParserTest` | RFC 4180 parsing — quoted fields, doubled quotes, embedded commas/newlines, CRLF/LF, missing trailing columns |
+| `HmacUtilTest` | HMAC-SHA256 known-answer vector, lowercase-hex format, determinism |
+| `WorkfrontJsonConverterServiceImplTest` | CSV → typed JSON (boolean `published`, int/null `daysForNextReview`), rows without a `Path` skipped |
+| `WorkfrontWebhookServiceImplTest` | Signs + POSTs to an in-process HTTP server: exact body, `X-Workfront-Signature`/`X-Workfront-Dataset` headers, non-2xx → failure, refuses to send when URL/secret missing |
