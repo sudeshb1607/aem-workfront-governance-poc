@@ -1,6 +1,6 @@
 {
-    "webhookUrl": "",
-    "webhookSecret": "",
+    "webhookUrl": "https://httpbin.org/post",
+    "webhookSecret": "dummy-workfront-secret",
     "signatureHeader": "X-Workfront-Signature",
     "datasetHeader": "X-Workfront-Dataset",
     "connectTimeoutMs": 10000,

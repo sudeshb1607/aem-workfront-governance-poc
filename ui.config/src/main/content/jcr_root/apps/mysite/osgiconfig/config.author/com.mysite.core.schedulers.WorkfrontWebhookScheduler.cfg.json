@@ -1,5 +1,5 @@
 {
-    "scheduler.expression": "0 0 3 ? * SAT",
+    "scheduler.expression": "0 0/10 * * * ?",
     "scheduler.concurrent": false,
     "maxAttempts": 3,
     "retryBackoffSeconds": 5,

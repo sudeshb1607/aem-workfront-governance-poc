@@ -1,5 +1,5 @@
 {
-    "scheduler.expression": "0 0 10 ? * SAT",
+    "scheduler.expression": "0 0/5 * * * ?",
     "scheduler.concurrent": false,
     "searchRoot": "/content",
     "pauseBetweenTreesSeconds": 5

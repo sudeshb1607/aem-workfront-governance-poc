@@ -1,5 +1,5 @@
 {
-    "scheduler.expression": "0 0 2 * * ?",
+    "scheduler.expression": "0 0/5 * * * ?",
     "scheduler.concurrent": false,
     "maxAttempts": 3,
     "retryBackoffSeconds": 5,
