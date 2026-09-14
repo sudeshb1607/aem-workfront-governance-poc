@@ -243,7 +243,7 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         final ValueMap contentVm = content != null ? content.getValueMap() : ValueMap.EMPTY;
         final ValueMap pageVm = pageResource.getValueMap();
 
-        if (isExcludedByProperty(contentVm, pageVm, def.getExcludeProps())) {
+        if (isExcludedByProperty(contentVm, pageVm, def.getExcludeProperty())) {
             return false;
         }
         if (!filter.accept(pageResource, contentVm)) {
@@ -266,17 +266,22 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         return false;
     }
 
+    /**
+     * Applies the single optional exclude-property condition. When {@code ep} is
+     * {@code null} (no property configured) no comparison is made. The property is
+     * read from {@code jcr:content} first, then the page node.
+     *
+     * @return {@code true} when the page should be excluded
+     */
     private boolean isExcludedByProperty(final ValueMap contentVm, final ValueMap pageVm,
-                                         final List<ExcludeProperty> excludeProps) {
-        for (final ExcludeProperty ep : excludeProps) {
-            final Object value = contentVm.containsKey(ep.getName())
-                    ? contentVm.get(ep.getName())
-                    : (pageVm.containsKey(ep.getName()) ? pageVm.get(ep.getName()) : null);
-            if (value != null && ep.getValue().equals(String.valueOf(value))) {
-                return true;
-            }
+                                         final ExcludeProperty ep) {
+        if (ep == null) {
+            return false;
         }
-        return false;
+        final Object value = contentVm.containsKey(ep.getName())
+                ? contentVm.get(ep.getName())
+                : (pageVm.containsKey(ep.getName()) ? pageVm.get(ep.getName()) : null);
+        return value != null && ep.getValue().equals(String.valueOf(value));
     }
 
     // ------------------------------------------------------------------ CSV rows

@@ -18,8 +18,9 @@ package com.mysite.core.models.report;
 /**
  * Immutable value object describing an exclude-property condition: a page is
  * omitted from the report when the named property (read from {@code jcr:content}
- * first, then the page node) equals the configured value. Populated from one
- * row of the {@code excludeProps} composite multifield.
+ * first, then the page node) equals the configured value. Populated from the
+ * single optional {@code excludePropertyName} / {@code excludePropertyValue}
+ * fields on a report component.
  */
 public final class ExcludeProperty {
 

@@ -1,49 +1,96 @@
 # Workfront Reports Framework
 
-Five governance reports over AEM pages. Each report queries pages by a rule, writes **one CSV per
-brand** (NatWest / RBS / Ulster, …) into a segregated DAM folder, and runs **weekly (weekends)**.
-**Reports 2–5** are converted to signed JSON and pushed to a **Workfront Fusion webhook**; **Report 1**
-(All Live) is a full CSV kept in the DAM for download (not sent).
+Five governance reports over AEM pages. Each report queries pages by its own rule, writes **one CSV per
+brand** (e.g. NatWest / RBS / Ulster) into a segregated DAM folder, and runs **weekly**. **Reports 2–5**
+are converted to signed JSON and pushed to a **Workfront Fusion webhook**; **Report 1** (All Live) is a
+full CSV kept in the DAM for download (not sent).
 
-Built as a **common, reusable framework**: a shared report engine, a shared CSV→JSON converter, and a
-shared signed-webhook sender.
-
-### Webhook signature & security
-
-Each dataset is POSTed to the configured Fusion webhook with:
-- `Content-Type: application/json`
-- `X-Workfront-Dataset: <reportId>-<brand>`
-- `X-Workfront-Signature: sha256=<hex>` where the value is `HMAC-SHA256(webhookSecret, rawBody)` (see `HmacUtil`).
-
-Fusion verifies by recomputing the HMAC over the exact received body with the shared secret. The
-`webhookUrl` / `webhookSecret` live in the `WorkfrontWebhookServiceImpl` OSGi config — **set the secret
-per environment; never commit a real secret**. The service refuses to send if the URL or secret is unset.
+It is a **common, reusable framework**: one shared report engine, one shared CSV→JSON converter, and one
+shared signed-webhook sender. Each report's *selection rule* lives in its **own class** (`reports/filter/*`)
+so a change to one report cannot affect the others.
 
 ---
 
-## The five reports
+## 1. Architecture & flow
+
+### 1a. CSV generation (weekly)
+
+```
+(cron, weekend)  ReportCsvGeneratorScheduler          [config.author]
+      │   opens service resolver → user 'workfront-csv-service' (subservice 'workfront-csv-write')
+      ▼
+ReportDefinitionReader.readAll("/content")
+      │   one QueryBuilder query per report resource type  →  finds every authored report component
+      ▼
+for each ReportDefinition:
+   ReportGeneratorService.generate(def)
+      └── for each configured brand:
+             QueryBuilder batches:  type=cq:Page under the brand's root path(s)
+                └── ReportFilter (per-report class)  +  exclusion (path / property)
+                       └── matched page  →  resolve columns  →  CSV row   (stop at maxRecords)
+             write  <outputFolder>/csv/<reportId>-<brand>.csv   via AssetManager
+```
+
+### 1b. Convert & push to Workfront (weekly)
+
+```
+DAM  /content/dam/mysite/workfront-reports/<reportId>/csv/<reportId>-<brand>.csv
+      │  (cron, weekend)  WorkfrontJsonConverterScheduler  — scans the reports root  [config.author]
+      ▼
+WorkfrontJsonConverterService.convert(csv → <reportId>/json)
+      │  SimpleCsvParser → typed JSON dataset { dataset, generatedAt, recordCount, records[] }
+      ▼
+DAM  /content/dam/mysite/workfront-reports/<reportId>/json/<reportId>-<brand>.json
+      │  (cron, weekend)  WorkfrontWebhookScheduler  — scans the reports root  [config.author]
+      ▼
+WorkfrontWebhookService.send(json)
+      │  signature = HMAC-SHA256(webhookSecret, rawBody)   (HmacUtil)
+      ▼
+POST <webhookUrl>
+      Content-Type: application/json
+      X-Workfront-Dataset:   <reportId>-<brand>
+      X-Workfront-Signature: sha256=<hex>
+   →  Workfront Fusion  (recomputes the HMAC to verify, then ingests the dataset)
+```
+
+Report 1 (`all-live`) writes **outside** the reports root, so the converter/webhook never pick it up — it
+stays a DAM-only CSV.
+
+---
+
+## 2. The five reports
 
 | # | reportId | Rule | Threshold (default) | Per brand | Sent |
 |---|---|---|---|---|---|
 | 1 | `all-live` | All **live** (published) pages under the configured paths | — | optional | No (DAM only) |
 | 2 | `expiring-published` | **Published** pages expiring within N days (incl. already expired) | `thresholdDays` = 45 | Yes | Yes |
-| 3 | `not-live-stale` | **Not live**, not modified in N months, no exclusion flag | `thresholdMonths` = 6 | Yes | Yes |
-| 4 | `live-long-no-children` | **Live**, last published > N months ago, no child page, no exclusion flag | `thresholdMonths` = 18 | Yes | Yes |
+| 3 | `not-live-stale` | **Not live**, not modified in N months | `thresholdMonths` = 6, `staleDateProp` = `cq:lastModified` | Yes | Yes |
+| 4 | `live-long-no-children` | **Live**, last published > N months ago, no child page | `thresholdMonths` = 18 | Yes | Yes |
 | 5 | `archive-aged` | Pages in configured **archive folders** aged within [min,max] days | `archiveMinDays`=60, `archiveMaxDays`=90, `archiveDateProp`=`cq:lastModified` | Yes | Yes |
 
-**Rule semantics** (`ReportFilterFactory`):
+**Rule classes (segregated)** — `reports/filter/`:
 
-- *Live / published* — `ReplicationStatus.isActivated()` on `jcr:content`.
-- *Last published* — `cq:lastReplicated`. *Last modified* — `cq:lastModified`. *Expiry* — `contentReviewExpiryDate`.
-- *No child page* — the page has no child node of type `cq:Page`.
-- *Exclusion* (applied to every report) — a page is skipped when it is under an **exclude path** or has an
-  **exclude-property** match. Default exclude-property is `excludeFromReport = true`.
+| Report | Filter class | Key checks |
+|---|---|---|
+| all-live | `AllLiveFilter` | `ReplicationStatus.isActivated()` |
+| expiring-published | `ExpiringPublishedFilter` | published AND `contentReviewExpiryDate` ≤ today+N |
+| not-live-stale | `NotLiveStaleFilter` | not published AND `<staleDateProp>` < today−N months |
+| live-long-no-children | `LiveLongNoChildrenFilter` | published AND `cq:lastReplicated` < today−N months AND no child `cq:Page` |
+| archive-aged | `ArchiveAgedFilter` | `<archiveDateProp>` age ∈ [min,max] days |
 
-Reports 2–5 cap at **1000 rows per brand** (ordered by path). Report 1 is uncapped.
+`ReportFilterFactory` only *dispatches* a definition to the right class — editing one report's rule touches
+only its filter class.
+
+**Exclusion** (applied to every report, in the generator — not the filter): a page is skipped when it is
+under an **exclude path**, or when the **single optional exclude property** is set and the page's property
+(read from `jcr:content`, then the page node) equals the configured boolean value. **If the exclude
+property name is empty, no property comparison is made.**
+
+Reports 2–5 cap at **`maxRecords` (default 1000) per brand** (ordered by path). Report 1 is uncapped.
 
 ---
 
-## Folder layout & naming
+## 3. Folder layout & naming
 
 Sent reports root (scanned by the converter/webhook): `/content/dam/mysite/workfront-reports/`
 ```
@@ -54,13 +101,62 @@ workfront-reports/
 ```
 Report 1 (DAM only, not scanned): `/content/dam/mysite/reports/all-live/csv/all-live-<brand>.csv`.
 
-The dataset name in the JSON and the `X-Workfront-Dataset` header are the CSV base name
+The JSON `dataset` field **and** the `X-Workfront-Dataset` header are the CSV base name
 `<reportId>-<brand>` — so Workfront can identify both the report and the brand. Files are **overwritten**
 each run (stable names → stable datasets).
 
 ---
 
-## Configuration (authorable components)
+## 4. Developer setup / prerequisites
+
+Everything below is deployed automatically by the Maven build (`ui.config`, `ui.apps`), except the
+**webhook URL/secret**, which must be set per environment.
+
+### 4.1 System user, service mapping & ACLs (auto, via repoinit)
+- **System user:** `workfront-csv-service` at `system/mysite`.
+- **Subservice mapping:** `com.mysite.mysite.core:workfront-csv-write=workfront-csv-service`
+  — `ui.config/.../config/org.apache.sling.serviceusermapping.impl.ServiceUserMapperImpl.amended~workfront.cfg.json`.
+- **Repoinit** — `ui.config/.../config/org.apache.sling.jcr.repoinit.RepositoryInitializer~mysitereports.cfg.json`
+  creates the user, the DAM folders, `/var/taskmanagement`, and grants:
+  - `jcr:read` on `/content`
+  - `jcr:read, rep:write, jcr:versionManagement, crx:replicate` on `/content/dam/mysite/workfront-reports`
+    and `/content/dam/mysite/reports/all-live`
+  - `jcr:read, rep:write` on `/var/taskmanagement` (AEM Inbox failure notifications).
+
+### 4.2 DAM folders (auto, via repoinit)
+- `/content/dam/mysite/workfront-reports` — sent reports (2–5).
+- `/content/dam/mysite/reports/all-live` — report 1 (DAM-only).
+- Vault filter for both is in `ui.content/.../META-INF/vault/filter.xml`.
+
+### 4.3 OSGi configuration (PIDs)
+| PID (location) | Set |
+|---|---|
+| `com.mysite.core.services.impl.WorkfrontWebhookServiceImpl` (`config/`) | **`webhookUrl`, `webhookSecret`** (per environment — never commit a real secret), plus header names + timeouts |
+| `com.mysite.core.services.impl.ReportGeneratorServiceImpl` (`config/`) | `pageBatchSize` (default 500) |
+| `com.mysite.core.schedulers.ReportCsvGeneratorScheduler` (`config.author/`) | cron (`0 0 2 ? * SAT`), `searchRoot`, pause |
+| `com.mysite.core.schedulers.WorkfrontJsonConverterScheduler` (`config.author/`) | cron (`0 0 3 ? * SAT`), `reportsRoot`, retries |
+| `com.mysite.core.schedulers.WorkfrontWebhookScheduler` (`config.author/`) | cron (`0 0 4 ? * SAT`), `reportsRoot`, retries |
+
+The schedulers live in `config.author` so they run on **author only** (where the content + DAM live).
+
+### 4.4 Build & deploy
+```
+mvn -PautoInstallSinglePackage clean install      # full package to a local author
+# or, iteratively:
+mvn -PautoInstallBundle install -pl core          # code only
+mvn -PautoInstallPackage install -pl ui.apps      # components
+mvn -PautoInstallPackage install -pl ui.config    # OSGi configs / repoinit
+```
+
+### 4.5 Authoring a report (per report component)
+1. Open a config page under a site root (any `cq:Page` under `/content`), e.g.
+   `/content/mysite/us/en/workfront-report-config`.
+2. From the component browser (**My Site - Structure**) add the report component(s).
+3. Configure the dialog tabs (below) and click **Generate now** to test, or wait for the weekly cron.
+
+---
+
+## 5. Configuration (authorable components)
 
 One component per report (group **My Site - Structure**), all sharing a hidden base
 (`mysite/components/reports/reportbase`) that renders the edit-mode summary + a **Generate now** button.
@@ -73,134 +169,126 @@ One component per report (group **My Site - Structure**), all sharing a hidden b
 | `mysite/components/reports/live-long-no-children` | Live Long-Published, No Children |
 | `mysite/components/reports/archive-aged` | Archive Aged |
 
-**Dialog tabs** (per component): **Brands** (composite multifield: `brand` + `rootPaths`), **Rule**
-(type-specific threshold fields), **Exclusions** (`excludePaths`, `excludeProps`), **Output**
-(`outputFolder`, `maxRecords`, `activateCsv`), **Columns** (`header` + `source`). Defaults are applied by
-`ReportDefinitionReader` for anything left empty, so a freshly-placed component already works.
+**Dialog tabs:**
+- **Brands** — composite multifield: `brand` (key) + `rootPaths` (one or more content roots). One CSV per brand.
+- **Rule** — the type-specific threshold field(s) (e.g. `thresholdDays`, `thresholdMonths` + `staleDateProp`,
+  or `archiveMinDays`/`archiveMaxDays`/`archiveDateProp`).
+- **Exclusions** — `excludePaths` (multifield) + a **single** `excludePropertyName` (text) and
+  `excludePropertyValue` (select: `true`/`false`). Leave the name empty for no property exclusion.
+- **Output** — `outputFolder`, `maxRecords`, `activateCsv`.
+- **Columns** — `header` + `source` rows.
 
-**Columns** default to the 12-column governance schema (kept identical to the Workfront JSON converter):
+Defaults are applied by `ReportDefinitionReader` for anything left empty, so a freshly-placed component
+already works.
+
+**Columns** default to the governance schema (kept identical to the JSON converter's expected header):
 `Hash,Title,Path,Brand,Last Modified,Modified By,Published,Next Review Date,Days For Next Review,Franchise,Page Owners,Template`.
 Column `source` is a `jcr:content` property or a token: `:title`, `:path`, `:url`, `:hash`, `:brand`,
 `:published`, `:daysToReview`.
 
 ---
 
-## Schedulers (weekly)
+## 6. Schedulers & scheduler ↔ report mapping
 
-| Scheduler | Default cron | Does |
+| Scheduler (config.author) | Default cron | Does |
 |---|---|---|
-| `ReportCsvGeneratorScheduler` (config.author) | `0 0 2 ? * SAT` | Discovers all report components and generates every per-brand CSV. |
-| `WorkfrontJsonConverterScheduler` (config.author) | `0 0 3 ? * SAT` | Scans `reportsRoot`; converts each `<report>/csv/*.csv` → `<report>/json/`. |
-| `WorkfrontWebhookScheduler` (config.author) | `0 0 4 ? * SAT` | Scans `reportsRoot`; POSTs each `<report>/json/*.json` to the webhook (HMAC-SHA256 signed). |
+| `ReportCsvGeneratorScheduler` | `0 0 2 ? * SAT` | Discovers all report components and generates every per-brand CSV. |
+| `WorkfrontJsonConverterScheduler` | `0 0 3 ? * SAT` | Scans `reportsRoot`; converts each `<report>/csv/*.csv` → `<report>/json/`. |
+| `WorkfrontWebhookScheduler` | `0 0 4 ? * SAT` | Scans `reportsRoot`; POSTs each `<report>/json/*.json` (HMAC-SHA256 signed). |
 
-Each stage isolates failures per file/brand and (for the pipeline) retries in-run; anything still failing
-is retried on the next run.
+The schedulers are **shared** across all reports (no per-report scheduler). A report binds to the pipeline
+by its **resource type** (generation) and its **output folder under the reports root** (conversion + send):
 
-### Scheduler ↔ report mapping
+| reportId | Config resource type | Generated by | Output folder | Converted / Sent by |
+|---|---|---|---|---|
+| `all-live` | `…/reports/all-live` | CSV scheduler | `/content/dam/mysite/reports/all-live` (outside root) | — (DAM-only) |
+| `expiring-published` | `…/reports/expiring-published` | CSV scheduler | `…/workfront-reports/expiring-published` | Converter + Webhook |
+| `not-live-stale` | `…/reports/not-live-stale` | CSV scheduler | `…/workfront-reports/not-live-stale` | Converter + Webhook |
+| `live-long-no-children` | `…/reports/live-long-no-children` | CSV scheduler | `…/workfront-reports/live-long-no-children` | Converter + Webhook |
+| `archive-aged` | `…/reports/archive-aged` | CSV scheduler | `…/workfront-reports/archive-aged` | Converter + Webhook |
 
-The schedulers are **shared** across all reports (there is no per-report scheduler). A report is bound to
-the pipeline purely by its **resource type** (for generation) and its **output folder under the reports
-root** (for conversion + sending):
-
-| Report (reportId) | Config resource type (discovered by the CSV scheduler) | Generated by | Output folder | Converted by | Sent by |
-|---|---|---|---|---|---|
-| `all-live` | `mysite/components/reports/all-live` | `ReportCsvGeneratorScheduler` | `/content/dam/mysite/reports/all-live` (outside reports root) | — (not converted) | — (DAM-only) |
-| `expiring-published` | `mysite/components/reports/expiring-published` | `ReportCsvGeneratorScheduler` | `…/workfront-reports/expiring-published` | `WorkfrontJsonConverterScheduler` | `WorkfrontWebhookScheduler` |
-| `not-live-stale` | `mysite/components/reports/not-live-stale` | `ReportCsvGeneratorScheduler` | `…/workfront-reports/not-live-stale` | `WorkfrontJsonConverterScheduler` | `WorkfrontWebhookScheduler` |
-| `live-long-no-children` | `mysite/components/reports/live-long-no-children` | `ReportCsvGeneratorScheduler` | `…/workfront-reports/live-long-no-children` | `WorkfrontJsonConverterScheduler` | `WorkfrontWebhookScheduler` |
-| `archive-aged` | `mysite/components/reports/archive-aged` | `ReportCsvGeneratorScheduler` | `…/workfront-reports/archive-aged` | `WorkfrontJsonConverterScheduler` | `WorkfrontWebhookScheduler` |
-
-How the binding works:
-- **Generation:** `ReportCsvGeneratorScheduler` → `ReportDefinitionReader.readAll(...)` runs one QueryBuilder
-  query **per report resource type** under `searchRoot` (default `/content`), so every authored report
-  component is found regardless of where its page lives. `all-live` writes outside the reports root, so it
-  is never picked up by the converter/webhook (DAM-only).
-- **Conversion & sending:** the converter and webhook schedulers are **folder-driven** — they iterate the
-  child folders of `reportsRoot` (`/content/dam/mysite/workfront-reports`) and process each report's
-  `csv/` → `json/` → webhook. To include or exclude a report from Workfront, place (or don't place) its
-  output under the reports root.
-
-So: **to add a 6th report**, create its component + resource type, point its `outputFolder` under the
-reports root (to send it) or elsewhere (DAM-only) — no scheduler changes are needed.
+Each stage isolates failures per file/brand and retries in-run; anything still failing is retried next run.
 
 ---
 
-## On-demand run
+## 7. On-demand run
 
 `POST /bin/mysite/report/run` with `configPath=<component path>` → `ReportRunServlet` reads the definition
 and calls `ReportGeneratorService`, returning `{success, reportId, csvPaths[], rows}`. The **Generate now**
-button on each component posts this using the author's session.
+button posts this using the author's session.
 
 ---
 
-## Connectivity — file by file
+## 8. Connectivity — file by file
 
 ```
 Component (mysite/components/reports/<reportId>)
   └─ ReportType.fromResourceType(...)                          core/reports/ReportType.java
   └─ ReportDefinitionReader.readOne(component)                 core/reports/ReportDefinitionReader.java
-       -> ReportDefinition (brands, thresholds, columns, …)    core/reports/ReportDefinition.java, BrandScope.java, ReportsConstants.java
+       -> ReportDefinition (brands, thresholds, columns, …)    core/reports/{ReportDefinition,BrandScope,ReportsConstants}.java
   ReportCsvGeneratorScheduler (weekly)  ── or ── ReportRunServlet (/bin/mysite/report/run)
   └─ ReportGeneratorService.generate(def)                      core/services/impl/ReportGeneratorServiceImpl.java
-       ├─ ReportFilterFactory.create(def, today)               core/reports/ReportFilterFactory.java (+ ReportFilter.java)
-       ├─ shared utils: CsvSupport, PagePublicationUtil,       core/util/*.java
-       │  BrandUtil, DateUtils, PageHashUtil
+       ├─ ReportFilterFactory.create(def, today)               core/reports/ReportFilterFactory.java
+       │     -> AllLiveFilter / ExpiringPublishedFilter /      core/reports/filter/*.java
+       │        NotLiveStaleFilter / LiveLongNoChildrenFilter / ArchiveAgedFilter
+       ├─ shared utils                                          core/util/{CsvSupport,PagePublicationUtil,BrandUtil,DateUtils,PageHashUtil}.java
        └─ writes <outputFolder>/csv/<reportId>-<brand>.csv
   WorkfrontJsonConverterScheduler (weekly)
   └─ WorkfrontJsonConverterService.convert(csv, <report>/json) core/services/impl/WorkfrontJsonConverterServiceImpl.java
-       └─ writes <report>/json/<reportId>-<brand>.json         (dataset = <reportId>-<brand>)
+       └─ SimpleCsvParser (core/util) → writes <report>/json/<reportId>-<brand>.json
   WorkfrontWebhookScheduler (weekly)
   └─ WorkfrontWebhookService.send(json)                        core/services/impl/WorkfrontWebhookServiceImpl.java
-       └─ POST <webhookUrl>  X-Workfront-Signature: sha256=…   HMAC over the body (HmacUtil)
-                             X-Workfront-Dataset: <reportId>-<brand>
+       └─ HmacUtil (core/util) → POST <webhookUrl> with X-Workfront-Signature + X-Workfront-Dataset
 ```
-
-**OSGi configs** (`ui.config/.../osgiconfig/`): `config/…ReportGeneratorServiceImpl.cfg.json`
-(pageBatchSize); `config.author/…ReportCsvGeneratorScheduler`, `…WorkfrontJsonConverterScheduler`,
-`…WorkfrontWebhookScheduler` (crons + reportsRoot); `config/…WorkfrontWebhookServiceImpl.cfg.json`
-(webhook URL + secret — set per environment, never commit real secrets).
-
-**Service user / ACLs** (`RepositoryInitializer~workfront.cfg.json`): reuses `workfront-csv-service`
-(subservice `workfront-csv-write`); read on `/content`, read/write/replicate on
-`/content/dam/mysite/workfront-reports` and `/content/dam/mysite/reports/all-live`. **Vault filter**
-(`ui.content`) includes both DAM roots.
 
 ---
 
-## Logging
+## 9. Logging
 
 `com.mysite.core.reports` / `.services` / `.schedulers` (routed to `csv-generator.log`):
-- **INFO** — activate config, run start/finish, per report/brand row counts, run summary.
+- **INFO** — activate config, run start/finish, per report/brand row counts, run summary, webhook status.
 - **DEBUG** — batch counts, cap reached, resolved paths.
 - **WARN** — missing roots/folders, skipped malformed rows, retryable failures, non-2xx webhook.
 - **ERROR** — final failures (with cause), missing/invalid config. The webhook secret is never logged.
 
 ---
 
-## Tests
+## 10. Tests
 
-`mvn -pl core test` (JUnit 5 + AEM Mock):
+`mvn -pl core test` (JUnit 5 + AEM Mock + Mockito):
 
 | Test | Covers |
 |---|---|
 | `ReportTypeTest` | reportId ↔ resource type, default folders, cap, sent flag |
-| `ReportDefinitionReaderTest` | brands, thresholds, columns, defaults, all-live specifics |
-| `ReportFilterFactoryTest` | not-live-stale + archive-aged date rules |
-| `ReportGeneratorServiceImplTest` | column resolution (incl. `:brand`/`:published`/`:daysToReview`) + exclusion (path/property) |
+| `ReportDefinitionReaderTest` | brands, thresholds, columns, single exclude property, defaults |
+| `ReportFilterFactoryTest` | all five rules (published rules via mocked `ReplicationStatus`) |
+| `ReportGeneratorServiceImplTest` | full generate() flow, columns, exclusion, cap, pagination, isolation |
 | `ReportConfigModelImplTest` | edit-mode model: validity, rule summary, definition |
-| `ReportRunServletTest` | run endpoint: success + 400/404 guards |
-| `CsvSupportTest`, `BrandUtilTest`, `DateUtilsTest`, `PagePublicationUtilTest` | shared utilities |
-
-The published-page rules (all-live / expiring / live-long) are verified end-to-end at deploy time,
-since AEM Mock reports pages as not-activated.
+| `ReportRunServletTest` | run endpoint: success + failure + guards |
+| `WorkfrontJsonConverterServiceImplTest` | CSV→typed JSON + DAM convert path |
+| `WorkfrontWebhookServiceImplTest` | signing + POST (in-process server), read/connect failures |
+| scheduler tests | root-driven iteration, retries, isolation |
+| `CsvSupportTest`, `BrandUtilTest`, `DateUtilsTest`, `PagePublicationUtilTest`, `HmacUtilTest`, `SimpleCsvParserTest` | shared utilities |
 
 ---
 
-## Notes / current scope
+## 11. Extending — add a 6th report
+
+1. Add a value to `ReportType` (reportId, output default, sent flag, default cap).
+2. Add a filter class in `reports/filter/` and wire it in `ReportFilterFactory`.
+3. Add an authorable component `mysite/components/reports/<reportId>` (extend `reportbase`) with its dialog.
+4. Point its `outputFolder` under the reports root to send it, or elsewhere for DAM-only.
+
+No scheduler changes are required — discovery is by resource type, and conversion/sending are folder-driven.
+
+---
+
+## 12. Notes / current scope
 
 - **Columns are shared** across all reports for now (the governance schema); change per component later.
   The JSON converter maps that fixed schema to typed JSON — if you change columns, revisit the converter.
 - **Report 4 “assign to user”** is a Workfront-side action; AEM only delivers the dataset.
 - **Report 5** is report-only (AEM does not move pages to the archive folders).
 - **Brands → roots** are configured explicitly per report; each brand yields one CSV.
-
+- `cq:lastModified` is auto-stamped by AEM on write, so `not-live-stale` / `archive-aged` support a
+  configurable date property (`staleDateProp` / `archiveDateProp`) when a stable/backdated date is needed.

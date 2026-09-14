@@ -107,11 +107,22 @@ class ReportGeneratorServiceImplTest {
     }
 
     @Test
-    void skipsPageWithExclusionFlag() {
-        final ReportDefinition def = allLiveDefinition();
+    void skipsPageWhenExcludePropertyMatches() {
+        final ReportDefinition def = allLiveDefinition(
+                "excludePropertyName", "excludeFromReport", "excludePropertyValue", "true");
         final Resource page = page("/content/natwest/x",
                 "jcr:primaryType", "cq:PageContent", "excludeFromReport", "true");
         assertFalse(new ReportGeneratorServiceImpl().appendPageRowIfMatched(
+                context.resourceResolver(), page, def, acceptAll, new StringBuilder()));
+    }
+
+    @Test
+    void doesNotExcludeWhenNoExcludePropertyConfigured() {
+        // Empty exclude-property name => no comparison, even if the flag is set on the page.
+        final ReportDefinition def = allLiveDefinition();
+        final Resource page = page("/content/natwest/y",
+                "jcr:primaryType", "cq:PageContent", "excludeFromReport", "true");
+        assertTrue(new ReportGeneratorServiceImpl().appendPageRowIfMatched(
                 context.resourceResolver(), page, def, acceptAll, new StringBuilder()));
     }
 

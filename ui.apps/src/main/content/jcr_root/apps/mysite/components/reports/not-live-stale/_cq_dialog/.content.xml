@@ -95,30 +95,29 @@
                                     name="./excludePaths"
                                     rootPath="/content"/>
                             </excludePaths>
-                            <excludeProps
+                            <excludePropertyName
                                 jcr:primaryType="nt:unstructured"
-                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
-                                fieldLabel="Exclude-property Conditions"
-                                fieldDescription="Exclude any page whose property equals the value (default excludeFromReport=true)."
-                                composite="{Boolean}true">
-                                <field
-                                    jcr:primaryType="nt:unstructured"
-                                    sling:resourceType="granite/ui/components/coral/foundation/container"
-                                    name="./excludeProps">
-                                    <items jcr:primaryType="nt:unstructured">
-                                        <propertyName
-                                            jcr:primaryType="nt:unstructured"
-                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
-                                            fieldLabel="Property Name"
-                                            name="./propertyName"/>
-                                        <propertyValue
-                                            jcr:primaryType="nt:unstructured"
-                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
-                                            fieldLabel="Property Value"
-                                            name="./propertyValue"/>
-                                    </items>
-                                </field>
-                            </excludeProps>
+                                sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
+                                fieldLabel="Exclusion Property (optional)"
+                                fieldDescription="Property tested on jcr:content (then the page node). Leave empty for no property-based exclusion."
+                                name="./excludePropertyName"/>
+                            <excludePropertyValue
+                                jcr:primaryType="nt:unstructured"
+                                sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                                fieldLabel="Exclusion Value"
+                                fieldDescription="Exclude the page when the property equals this value."
+                                name="./excludePropertyValue">
+                                <items jcr:primaryType="nt:unstructured">
+                                    <optTrue
+                                        jcr:primaryType="nt:unstructured"
+                                        text="true"
+                                        value="true"/>
+                                    <optFalse
+                                        jcr:primaryType="nt:unstructured"
+                                        text="false"
+                                        value="false"/>
+                                </items>
+                            </excludePropertyValue>
                         </items>
                     </exclusions>
                     <output
