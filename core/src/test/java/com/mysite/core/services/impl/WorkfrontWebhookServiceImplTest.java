@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,9 +17,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.sling.api.resource.Resource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import com.day.cq.dam.api.Asset;
+import com.day.cq.dam.api.Rendition;
 import com.mysite.core.services.WorkfrontWebhookService.SendResult;
 import com.mysite.core.util.HmacUtil;
 import com.sun.net.httpserver.HttpExchange;
@@ -42,6 +48,39 @@ class WorkfrontWebhookServiceImplTest {
         if (server != null) {
             server.stop(0);
         }
+    }
+
+    @Test
+    void sendReadsAssetSignsAndPosts() throws Exception {
+        final AtomicReference<String> seenDataset = new AtomicReference<>();
+        final AtomicReference<String> seenSignature = new AtomicReference<>();
+        final AtomicReference<byte[]> seenBody = new AtomicReference<>();
+
+        final String url = startServer(exchange -> {
+            seenDataset.set(exchange.getRequestHeaders().getFirst("X-Workfront-Dataset"));
+            seenSignature.set(exchange.getRequestHeaders().getFirst("X-Workfront-Signature"));
+            seenBody.set(readAll(exchange.getRequestBody()));
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+
+        final byte[] json = "{\"dataset\":\"expiring-published-natwest\",\"records\":[]}"
+                .getBytes(StandardCharsets.UTF_8);
+        final Rendition original = mock(Rendition.class);
+        when(original.getStream()).thenReturn(new ByteArrayInputStream(json));
+        final Asset asset = mock(Asset.class);
+        when(asset.getOriginal()).thenReturn(original);
+        final Resource jsonAsset = mock(Resource.class);
+        when(jsonAsset.getName()).thenReturn("expiring-published-natwest.json");
+        when(jsonAsset.adaptTo(Asset.class)).thenReturn(asset);
+
+        final WorkfrontWebhookServiceImpl service = service(url, SECRET);
+        final SendResult result = service.send(jsonAsset);
+
+        assertTrue(result.isSuccess(), result.getErrorMessage());
+        assertEquals("expiring-published-natwest", seenDataset.get());
+        assertArrayEquals(json, seenBody.get());
+        assertEquals("sha256=" + HmacUtil.sha256Hex(SECRET, json), seenSignature.get());
     }
 
     @Test
@@ -90,6 +129,22 @@ class WorkfrontWebhookServiceImplTest {
     }
 
     @Test
+    void nonSuccessWithBodyIncludesDetail() throws Exception {
+        final String url = startServer(exchange -> {
+            final byte[] resp = "bad request details".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(400, resp.length);
+            exchange.getResponseBody().write(resp);
+            exchange.close();
+        });
+        final WorkfrontWebhookServiceImpl service = service(url, SECRET);
+
+        final SendResult result = service.sendBody("ds", "{}".getBytes(StandardCharsets.UTF_8));
+        assertFalse(result.isSuccess());
+        assertEquals(400, result.getHttpStatus());
+        assertTrue(result.getErrorMessage().contains("bad request details"), result.getErrorMessage());
+    }
+
+    @Test
     void refusesToSendWhenSecretMissing() {
         final WorkfrontWebhookServiceImpl service = service("http://localhost:1/hook", "");
         final SendResult result = service.sendBody("ds", "{}".getBytes(StandardCharsets.UTF_8));
@@ -102,6 +157,35 @@ class WorkfrontWebhookServiceImplTest {
         final WorkfrontWebhookServiceImpl service = service("", SECRET);
         final SendResult result = service.sendBody("ds", "{}".getBytes(StandardCharsets.UTF_8));
         assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void sendFailsWhenAssetCannotBeRead() {
+        final Resource jsonAsset = mock(Resource.class);
+        when(jsonAsset.getName()).thenReturn("x.json");
+        when(jsonAsset.adaptTo(com.day.cq.dam.api.Asset.class)).thenReturn(null);
+
+        final WorkfrontWebhookServiceImpl service = service("http://127.0.0.1:9/hook", SECRET);
+        final SendResult result = service.send(jsonAsset);
+        assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void sendGuardWhenSecretUnconfigured() {
+        final Resource jsonAsset = mock(Resource.class);
+        when(jsonAsset.getName()).thenReturn("x.json");
+        final WorkfrontWebhookServiceImpl service = service("http://127.0.0.1:9/hook", "");
+        final SendResult result = service.send(jsonAsset);
+        assertFalse(result.isSuccess());
+        assertEquals(0, result.getHttpStatus());
+    }
+
+    @Test
+    void connectFailureIsAFailure() {
+        final WorkfrontWebhookServiceImpl service = service("http://127.0.0.1:9/hook", SECRET);
+        final SendResult result = service.sendBody("ds", "{}".getBytes(StandardCharsets.UTF_8));
+        assertFalse(result.isSuccess());
+        assertEquals(0, result.getHttpStatus());
     }
 
     private WorkfrontWebhookServiceImpl service(final String url, final String secret) {

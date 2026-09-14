@@ -3,14 +3,29 @@ package com.mysite.core.services.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 
 import javax.json.JsonObject;
 
+import org.apache.sling.api.resource.Resource;
+import org.apache.sling.api.resource.ResourceResolver;
 import org.junit.jupiter.api.Test;
+
+import com.day.cq.dam.api.Asset;
+import com.day.cq.dam.api.AssetManager;
+import com.day.cq.dam.api.Rendition;
+import com.mysite.core.services.WorkfrontJsonConverterService.ConversionResult;
 
 /**
  * Exercises the pure CSV -> JSON conversion ({@link WorkfrontJsonConverterServiceImpl#buildDataset})
- * without DAM asset I/O, so the parsing/typing/skipping logic is verified directly.
+ * plus the full {@code convert()} DAM path (with a mocked asset + AssetManager).
  */
 class WorkfrontJsonConverterServiceImplTest {
 
@@ -18,6 +33,92 @@ class WorkfrontJsonConverterServiceImplTest {
             + "Next Review Date,Days For Next Review,Franchise,Page Owners,Template\r\n";
 
     private final WorkfrontJsonConverterServiceImpl service = new WorkfrontJsonConverterServiceImpl();
+
+    @Test
+    void convertWritesJsonAssetIntoTargetFolder() throws Exception {
+        final String csv = HEADER
+                + "h1,Home,/content/natwest/en,natwest,2026-07-30,admin,True,,,,,\r\n";
+
+        final Rendition original = mock(Rendition.class);
+        when(original.getStream()).thenReturn(new ByteArrayInputStream(csv.getBytes(StandardCharsets.UTF_8)));
+        final Asset asset = mock(Asset.class);
+        when(asset.getOriginal()).thenReturn(original);
+
+        final AssetManager assetManager = mock(AssetManager.class);
+        final ResourceResolver resolver = mock(ResourceResolver.class);
+        when(resolver.adaptTo(AssetManager.class)).thenReturn(assetManager);
+
+        final Resource csvAsset = mock(Resource.class);
+        when(csvAsset.getName()).thenReturn("expiring-published-natwest.csv");
+        when(csvAsset.getPath()).thenReturn("/content/dam/mysite/workfront-reports/expiring-published/csv/expiring-published-natwest.csv");
+        when(csvAsset.adaptTo(Asset.class)).thenReturn(asset);
+        when(csvAsset.getResourceResolver()).thenReturn(resolver);
+
+        final ConversionResult result = service.convert(csvAsset,
+                "/content/dam/mysite/workfront-reports/expiring-published/json");
+
+        assertTrue(result.isSuccess(), result.getErrorMessage());
+        assertEquals(1, result.getRecordCount());
+        assertEquals("/content/dam/mysite/workfront-reports/expiring-published/json/expiring-published-natwest.json",
+                result.getJsonPath());
+        verify(assetManager).createAsset(
+                eq("/content/dam/mysite/workfront-reports/expiring-published/json/expiring-published-natwest.json"),
+                any(), eq("application/json"), eq(true));
+        verify(resolver).commit();
+    }
+
+    @Test
+    void convertFailsGracefullyForNonAsset() {
+        final Resource csvAsset = mock(Resource.class);
+        when(csvAsset.getName()).thenReturn("x.csv");
+        when(csvAsset.getPath()).thenReturn("/content/dam/x.csv");
+        when(csvAsset.adaptTo(Asset.class)).thenReturn(null);
+
+        final ConversionResult result = service.convert(csvAsset, "/content/dam/json");
+        assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void convertFailsWhenOriginalRenditionMissing() {
+        final Asset asset = mock(Asset.class);
+        when(asset.getOriginal()).thenReturn(null);
+        final Resource csvAsset = mock(Resource.class);
+        when(csvAsset.getName()).thenReturn("x.csv");
+        when(csvAsset.getPath()).thenReturn("/content/dam/x.csv");
+        when(csvAsset.adaptTo(Asset.class)).thenReturn(asset);
+
+        final ConversionResult result = service.convert(csvAsset, "/content/dam/json");
+        assertFalse(result.isSuccess());
+    }
+
+    @Test
+    void singleArgConvertUsesConfiguredOutputFolder() throws Exception {
+        final WorkfrontJsonConverterServiceImpl configured = new WorkfrontJsonConverterServiceImpl();
+        final WorkfrontJsonConverterServiceImpl.Config cfg = mock(WorkfrontJsonConverterServiceImpl.Config.class);
+        when(cfg.inputFolder()).thenReturn("/content/dam/in");
+        when(cfg.outputFolder()).thenReturn("/content/dam/out");
+        configured.activate(cfg);
+        assertEquals("/content/dam/in", configured.getInputFolder());
+        assertEquals("/content/dam/out", configured.getOutputFolder());
+
+        final Rendition original = mock(Rendition.class);
+        when(original.getStream()).thenReturn(new ByteArrayInputStream((HEADER
+                + "h1,T,/content/a,brandx,,,False,,,,,\r\n").getBytes(StandardCharsets.UTF_8)));
+        final Asset asset = mock(Asset.class);
+        when(asset.getOriginal()).thenReturn(original);
+        final AssetManager am = mock(AssetManager.class);
+        final ResourceResolver resolver = mock(ResourceResolver.class);
+        when(resolver.adaptTo(AssetManager.class)).thenReturn(am);
+        final Resource csvAsset = mock(Resource.class);
+        when(csvAsset.getName()).thenReturn("all-live-brandx.csv");
+        when(csvAsset.getPath()).thenReturn("/content/dam/in/all-live-brandx.csv");
+        when(csvAsset.adaptTo(Asset.class)).thenReturn(asset);
+        when(csvAsset.getResourceResolver()).thenReturn(resolver);
+
+        final ConversionResult result = configured.convert(csvAsset);
+        assertTrue(result.isSuccess(), result.getErrorMessage());
+        assertEquals("/content/dam/out/all-live-brandx.json", result.getJsonPath());
+    }
 
     @Test
     void convertsCsvToJsonWithTypedFields() {

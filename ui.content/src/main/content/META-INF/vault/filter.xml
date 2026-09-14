@@ -9,5 +9,7 @@
     </filter>
     <filter root="/content/dam/mysite/asset.jpg" mode="merge"/>
     <filter root="/content/dam/mysite/workfront-dashboard" mode="merge"/>
+    <filter root="/content/dam/mysite/workfront-reports" mode="merge"/>
+    <filter root="/content/dam/mysite/reports" mode="merge"/>
     <filter root="/content/experience-fragments/mysite" mode="merge"/>
 </workspaceFilter>

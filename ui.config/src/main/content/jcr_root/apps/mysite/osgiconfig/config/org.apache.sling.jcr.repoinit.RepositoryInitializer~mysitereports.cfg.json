@@ -1,0 +1,8 @@
+{
+    "scripts": [
+        "create service user workfront-csv-service with path system/mysite",
+        "create path (sling:OrderedFolder) /content/dam/mysite/workfront-reports",
+        "create path (sling:OrderedFolder) /content/dam/mysite/reports/all-live",
+        "set ACL for workfront-csv-service\n  allow jcr:read on /content\n  allow jcr:read,rep:write,jcr:versionManagement,crx:replicate on /content/dam/mysite/workfront-reports\n  allow jcr:read,rep:write,jcr:versionManagement,crx:replicate on /content/dam/mysite/reports/all-live\nend"
+    ]
+}

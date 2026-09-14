@@ -102,6 +102,10 @@ node/
 coverage/
 reports/
 
+# ...but keep the AEM report components (the broad reports/ rule above must not swallow these)
+!ui.apps/src/main/content/jcr_root/apps/mysite/components/reports
+!ui.apps/src/main/content/jcr_root/apps/mysite/components/reports/**
+
 # Others
 dispatcher/src/conf.d/variables/default.vars
 ui.tests.wdio/test-module/assets/form/themes/**/*diff.png

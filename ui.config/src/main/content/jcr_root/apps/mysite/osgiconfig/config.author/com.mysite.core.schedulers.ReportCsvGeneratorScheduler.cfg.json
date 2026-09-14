@@ -1,0 +1,6 @@
+{
+    "scheduler.expression": "0 0 2 ? * SAT",
+    "scheduler.concurrent": false,
+    "searchRoot": "/content",
+    "pauseBetweenReportsSeconds": 5
+}

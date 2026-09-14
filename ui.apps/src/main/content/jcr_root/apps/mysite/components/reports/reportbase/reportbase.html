@@ -1,0 +1,70 @@
+<!--/* Governance report - author summary (edit mode only). Shared by all five report components. */-->
+<sly data-sly-use.model="com.mysite.core.models.ReportConfigModel"
+     data-sly-test.isEdit="${wcmmode.edit || wcmmode.preview}"></sly>
+
+<sly data-sly-test="${isEdit}">
+    <div class="cmp-report-config"
+         style="border:1px dashed #ccc; padding:1rem; font-family:sans-serif;">
+        <h3 style="margin-top:0;">Governance Report: ${model.reportId}</h3>
+
+        <sly data-sly-test="${!model.valid}">
+            <p><em>This component is not a recognised report type.</em></p>
+        </sly>
+
+        <sly data-sly-test="${model.valid}">
+            <p style="margin-top:0;">${model.ruleSummary}</p>
+            <table style="border-collapse:collapse; width:100%; margin-bottom:1rem;">
+                <tbody>
+                    <tr>
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Brands</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee;">
+                            <sly data-sly-list.b="${model.definition.brands}">${b.brand} (<sly
+                                data-sly-list.r="${b.roots}">${r}<sly data-sly-test="${rList.last != true}">, </sly></sly>)<sly
+                                data-sly-test="${bList.last != true}">; </sly></sly>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Max Records</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee;">${model.definition.maxRecords == 0 ? 'unlimited' : model.definition.maxRecords}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">CSV Output</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee;">${model.definition.outputFolder}/csv/${model.reportId}-&lt;brand&gt;.csv</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Sent to Workfront</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee;">${model.definition.sendToWorkfront ? 'Yes' : 'No (DAM only)'}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table style="border-collapse:collapse; width:100%;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">Column Header</th>
+                        <th style="text-align:left; border-bottom:1px solid #999; padding:4px;">Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr data-sly-repeat.col="${model.definition.columns}">
+                        <td style="padding:4px; border-bottom:1px solid #eee;">${col.header}</td>
+                        <td style="padding:4px; border-bottom:1px solid #eee;">${col.source}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div style="margin-top:1rem;">
+                <button type="button" class="cmp-report-config__run"
+                        data-config-path="${model.componentPath @ context='attribute'}"
+                        onclick="(function(b){b.disabled=true;b.textContent='Generating…';
+                            var d=new FormData();d.append('configPath',b.getAttribute('data-config-path'));
+                            fetch('/bin/mysite/report/run',{method:'POST',body:d,credentials:'same-origin'})
+                            .then(function(r){return r.json();})
+                            .then(function(j){b.disabled=false;b.textContent='Generate now';
+                                window.alert(j.success?('Report generated: '+j.rows+' row(s)\n'+(j.csvPaths||[]).join('\n')):('Failed: '+j.error));})
+                            .catch(function(e){b.disabled=false;b.textContent='Generate now';window.alert('Request failed: '+e);});
+                        })(this)">Generate now</button>
+            </div>
+        </sly>
+    </div>
+</sly>

@@ -65,4 +65,19 @@ class SimpleCsvParserTest {
     void headerOnlyYieldsNoRows() {
         assertTrue(SimpleCsvParser.parse("A,B,C\r\n").isEmpty());
     }
+
+    @Test
+    void handlesLoneCarriageReturnLineEndings() {
+        final List<Map<String, String>> rows = SimpleCsvParser.parse("A,B\rx,y\rp,q\r");
+        assertEquals(2, rows.size());
+        assertEquals("x", rows.get(0).get("A"));
+        assertEquals("q", rows.get(1).get("B"));
+    }
+
+    @Test
+    void quotedFieldSpanningLineIsOneRecord() {
+        final List<Map<String, String>> rows = SimpleCsvParser.parse("A\r\n\"line1\r\nline2\"\r\n");
+        assertEquals(1, rows.size());
+        assertEquals("line1\r\nline2", rows.get(0).get("A"));
+    }
 }

@@ -101,8 +101,15 @@ public class WorkfrontJsonConverterServiceImpl implements WorkfrontJsonConverter
 
     @Override
     public ConversionResult convert(final Resource csvAsset) {
+        return convert(csvAsset, outputFolder);
+    }
+
+    @Override
+    public ConversionResult convert(final Resource csvAsset, final String jsonOutputFolder) {
+        final String targetFolder = StringUtils.removeEnd(
+                StringUtils.defaultString(jsonOutputFolder, outputFolder).trim(), "/");
         final String csvName = StringUtils.removeEndIgnoreCase(csvAsset.getName(), CSV_EXTENSION);
-        final String jsonPath = outputFolder + "/" + csvName + JSON_EXTENSION;
+        final String jsonPath = targetFolder + "/" + csvName + JSON_EXTENSION;
         try {
             final Asset asset = csvAsset.adaptTo(Asset.class);
             if (asset == null) {

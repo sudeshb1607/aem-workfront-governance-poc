@@ -16,12 +16,24 @@ import org.osgi.annotation.versioning.ProviderType;
 public interface WorkfrontJsonConverterService {
 
     /**
-     * Converts one CSV asset to its JSON counterpart in the output folder.
+     * Converts one CSV asset to its JSON counterpart in the service's configured
+     * output folder.
      *
      * @param csvAsset the DAM CSV asset resource to convert
      * @return the outcome of the conversion attempt; never {@code null}
      */
     ConversionResult convert(Resource csvAsset);
+
+    /**
+     * Converts one CSV asset to a JSON asset written into an explicit output
+     * folder. Used by the multi-report scheduler so each report writes its JSON
+     * into its own {@code <report>/json} folder.
+     *
+     * @param csvAsset         the DAM CSV asset resource to convert
+     * @param jsonOutputFolder the DAM folder the JSON asset is written into
+     * @return the outcome of the conversion attempt; never {@code null}
+     */
+    ConversionResult convert(Resource csvAsset, String jsonOutputFolder);
 
     /**
      * @return the absolute DAM folder scanned for source {@code *.csv} files.
