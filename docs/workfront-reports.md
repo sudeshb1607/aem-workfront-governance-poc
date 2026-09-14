@@ -114,12 +114,17 @@ each run (stable names → stable datasets).
 Everything below is deployed automatically by the Maven build (`ui.config`, `ui.apps`), except the
 **webhook URL/secret**, which must be set per environment.
 
+> **Run mode:** the framework runs on **author only** (content, DAM and the schedulers all live on
+> author; nothing generates or pushes from publish). Accordingly **all** framework OSGi configs —
+> services, repoinit, service-user mapping and schedulers — live in `config.author/`. Nothing
+> framework-related is deployed to publish.
+
 ### 4.1 System user, service mapping & ACLs (auto, via repoinit)
 - **System user:** `workfront-csv-service` at `system/mysite`.
 - **Subservice mapping:** `com.mysite.mysite.core:workfront-csv-write=workfront-csv-service`
-  — `ui.config/.../config/org.apache.sling.serviceusermapping.impl.ServiceUserMapperImpl.amended-mysitereports.xml`
+  — `ui.config/.../config.author/org.apache.sling.serviceusermapping.impl.ServiceUserMapperImpl.amended-mysitereports.xml`
   (a project-unique factory alias — do **not** reuse `~workfront`, it collides with any other project's amendment on a shared instance).
-- **Repoinit** — `ui.config/.../config/org.apache.sling.jcr.repoinit.RepositoryInitializer-mysitereports.xml`
+- **Repoinit** — `ui.config/.../config.author/org.apache.sling.jcr.repoinit.RepositoryInitializer-mysitereports.xml`
   creates the user, the DAM folders, `/var/taskmanagement`, and grants:
   - `jcr:read` on `/content`
   - `jcr:read, rep:write, jcr:versionManagement, crx:replicate` on `/content/dam/mysite/workfront-reports`
@@ -134,13 +139,14 @@ Everything below is deployed automatically by the Maven build (`ui.config`, `ui.
 ### 4.3 OSGi configuration (PIDs)
 | PID (location) | Set |
 |---|---|
-| `com.mysite.core.services.impl.WorkfrontWebhookServiceImpl` (`config/`) | **`webhookUrl`, `webhookSecret`** (per environment — never commit a real secret), plus header names + timeouts |
-| `com.mysite.core.services.impl.ReportGeneratorServiceImpl` (`config/`) | `pageBatchSize` (default 500) |
+| `com.mysite.core.services.impl.WorkfrontWebhookServiceImpl` (`config.author/`) | **`webhookUrl`, `webhookSecret`** (per environment — never commit a real secret), plus header names + timeouts |
+| `com.mysite.core.services.impl.WorkfrontJsonConverterServiceImpl` (`config.author/`) | `inputFolder`, `outputFolder` |
+| `com.mysite.core.services.impl.ReportGeneratorServiceImpl` (`config.author/`) | `pageBatchSize` (default 500) |
 | `com.mysite.core.schedulers.ReportCsvGeneratorScheduler` (`config.author/`) | cron (`0 0 2 ? * SAT`), `searchRoot`, pause |
 | `com.mysite.core.schedulers.WorkfrontJsonConverterScheduler` (`config.author/`) | cron (`0 0 3 ? * SAT`), `reportsRoot`, retries |
 | `com.mysite.core.schedulers.WorkfrontWebhookScheduler` (`config.author/`) | cron (`0 0 4 ? * SAT`), `reportsRoot`, retries |
 
-The schedulers live in `config.author` so they run on **author only** (where the content + DAM live).
+All of the above live in `config.author` so the framework runs on **author only** (where the content + DAM live). Nothing is deployed to publish.
 
 ### 4.4 Build & deploy
 ```
