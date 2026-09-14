@@ -1,8 +1,0 @@
-{
-    "scripts": [
-        "create service user unpublished-report-service with path system/mysite",
-        "create path (sling:OrderedFolder) /content/dam/mysite/reports",
-        "create path (sling:Folder) /var/taskmanagement",
-        "set ACL for unpublished-report-service\n  allow jcr:read on /content\n  allow jcr:read,rep:write,jcr:versionManagement,crx:replicate on /content/dam/mysite/reports\n  allow jcr:read,rep:write on /var/taskmanagement\nend"
-    ]
-}

@@ -1,8 +1,0 @@
-{
-    "scheduler.expression": "0 0 8 ? * SUN",
-    "scheduler.concurrent": false,
-    "searchRoot": "/content",
-    "freshnessThresholdMinutes": 60,
-    "minCsvSizeBytes": 1,
-    "pauseBetweenTreesSeconds": 5
-}

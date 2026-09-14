@@ -48,7 +48,7 @@ public class WorkfrontJsonConverterServiceImpl implements WorkfrontJsonConverter
     private static final String JSON_EXTENSION = ".json";
     private static final String JSON_MIME_TYPE = "application/json";
 
-    // CSV column headers (must match WorkfrontCsvGeneratorServiceImpl.CSV_HEADER).
+    // CSV column headers (must match the report engine's default columns; see ReportsConstants.defaultColumns()).
     private static final String COL_HASH = "Hash";
     private static final String COL_TITLE = "Title";
     private static final String COL_PATH = "Path";
