@@ -78,8 +78,10 @@ stays a DAM-only CSV.
 | live-long-no-children | `LiveLongNoChildrenFilter` | published AND `cq:lastReplicated` < today−N months AND no child `cq:Page` |
 | archive-aged | `ArchiveAgedFilter` | `<archiveDateProp>` age ∈ [min,max] days |
 
-`ReportFilterFactory` only *dispatches* a definition to the right class — editing one report's rule touches
-only its filter class.
+`ReportGeneratorService` has a **per-report creation method** (`generateAllLive`, `generateExpiringPublished`,
+`generateNotLiveStale`, `generateLiveLongNoChildren`, `generateArchiveAged`) that wires its own filter class
+and calls the shared engine — so editing one report's rule or wiring touches only its filter class and its
+one creation method, never the others.
 
 **Exclusion** (applied to every report, in the generator — not the filter): a page is skipped when it is
 under an **exclude path**, or when the **single optional exclude property** is set and the page's property
@@ -228,9 +230,11 @@ Component (mysite/components/reports/<reportId>)
        -> ReportDefinition (brands, thresholds, columns, …)    core/reports/{ReportDefinition,BrandScope,ReportsConstants}.java
   ReportCsvGeneratorScheduler (weekly)  ── or ── ReportRunServlet (/bin/mysite/report/run)
   └─ ReportGeneratorService.generate(def)                      core/services/impl/ReportGeneratorServiceImpl.java
-       ├─ ReportFilterFactory.create(def, today)               core/reports/ReportFilterFactory.java
-       │     -> AllLiveFilter / ExpiringPublishedFilter /      core/reports/filter/*.java
-       │        NotLiveStaleFilter / LiveLongNoChildrenFilter / ArchiveAgedFilter
+       ├─ per-report method: generateAllLive / generateExpiringPublished /
+       │  generateNotLiveStale / generateLiveLongNoChildren / generateArchiveAged
+       │     -> builds its filter                              core/reports/filter/*.java
+       │        (AllLiveFilter, ExpiringPublishedFilter, NotLiveStaleFilter, …)
+       │     -> runReport(def, filter)  (shared engine)
        ├─ shared utils                                          core/util/{CsvSupport,PagePublicationUtil,BrandUtil,DateUtils,PageHashUtil}.java
        └─ writes <outputFolder>/csv/<reportId>-<brand>.csv
   WorkfrontJsonConverterScheduler (weekly)
@@ -261,7 +265,7 @@ Component (mysite/components/reports/<reportId>)
 |---|---|
 | `ReportTypeTest` | reportId ↔ resource type, default folders, cap, sent flag |
 | `ReportDefinitionReaderTest` | brands, thresholds, columns, single exclude property, defaults |
-| `ReportFilterFactoryTest` | all five rules (published rules via mocked `ReplicationStatus`) |
+| `ReportFilterTest` | all five rule classes (published rules via mocked `ReplicationStatus`) |
 | `ReportGeneratorServiceImplTest` | full generate() flow, columns, exclusion, cap, pagination, isolation |
 | `ReportConfigModelImplTest` | edit-mode model: validity, rule summary, definition |
 | `ReportRunServletTest` | run endpoint: success + failure + guards |
@@ -275,7 +279,8 @@ Component (mysite/components/reports/<reportId>)
 ## 11. Extending — add a 6th report
 
 1. Add a value to `ReportType` (reportId, output default, sent flag, default cap).
-2. Add a filter class in `reports/filter/` and wire it in `ReportFilterFactory`.
+2. Add a filter class in `reports/filter/` and a per-report `generate…` method in `ReportGeneratorServiceImpl`
+   (wire it in the `generate(...)` dispatch switch).
 3. Add an authorable component `mysite/components/reports/<reportId>` (extend `reportbase`) with its dialog.
 4. Point its `outputFolder` under the reports root to send it, or elsewhere for DAM-only.
 

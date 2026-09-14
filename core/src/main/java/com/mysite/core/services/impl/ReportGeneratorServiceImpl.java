@@ -47,8 +47,12 @@ import com.mysite.core.models.report.ReportColumn;
 import com.mysite.core.reports.BrandScope;
 import com.mysite.core.reports.ReportDefinition;
 import com.mysite.core.reports.ReportFilter;
-import com.mysite.core.reports.ReportFilterFactory;
 import com.mysite.core.reports.ReportsConstants;
+import com.mysite.core.reports.filter.AllLiveFilter;
+import com.mysite.core.reports.filter.ArchiveAgedFilter;
+import com.mysite.core.reports.filter.ExpiringPublishedFilter;
+import com.mysite.core.reports.filter.LiveLongNoChildrenFilter;
+import com.mysite.core.reports.filter.NotLiveStaleFilter;
 import com.mysite.core.services.ReportGeneratorService;
 import com.mysite.core.util.BrandUtil;
 import com.mysite.core.util.CsvSupport;
@@ -114,10 +118,69 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
 
     @Override
     public ReportRunResult generate(final ReportDefinition definition) {
+        final LocalDate today = LocalDate.now();
+        switch (definition.getType()) {
+            case ALL_LIVE:
+                return generateAllLive(definition, today);
+            case EXPIRING_PUBLISHED:
+                return generateExpiringPublished(definition, today);
+            case NOT_LIVE_STALE:
+                return generateNotLiveStale(definition, today);
+            case LIVE_LONG_NO_CHILDREN:
+                return generateLiveLongNoChildren(definition, today);
+            case ARCHIVE_AGED:
+                return generateArchiveAged(definition, today);
+            default:
+                LOG.error("Unknown report type for config {}", definition.getComponentPath());
+                return ReportRunResult.failure("Unknown report type");
+        }
+    }
+
+    // ----------------------------------------------------- per-report creation methods
+    // Each report has its own creation method that wires its selection rule, so a change
+    // to one report cannot affect the others. They all share runReport(...) for the common
+    // traverse + filter + CSV-write mechanics.
+
+    /** Report 1 — all live (published) pages under the configured paths. */
+    private ReportRunResult generateAllLive(final ReportDefinition def, final LocalDate today) {
+        return runReport(def, new AllLiveFilter());
+    }
+
+    /** Report 2 — published pages expiring within the threshold (or already expired). */
+    private ReportRunResult generateExpiringPublished(final ReportDefinition def, final LocalDate today) {
+        return runReport(def, new ExpiringPublishedFilter(today, def.getThresholdDays()));
+    }
+
+    /** Report 3 — not-live pages not modified within the threshold window. */
+    private ReportRunResult generateNotLiveStale(final ReportDefinition def, final LocalDate today) {
+        return runReport(def, new NotLiveStaleFilter(today, def.getThresholdMonths(), def.getStaleDateProp()));
+    }
+
+    /** Report 4 — live pages last published beyond the threshold, with no child page. */
+    private ReportRunResult generateLiveLongNoChildren(final ReportDefinition def, final LocalDate today) {
+        return runReport(def, new LiveLongNoChildrenFilter(today, def.getThresholdMonths()));
+    }
+
+    /** Report 5 — pages in the archive folders aged within the [min,max] day window. */
+    private ReportRunResult generateArchiveAged(final ReportDefinition def, final LocalDate today) {
+        return runReport(def, new ArchiveAgedFilter(today, def.getArchiveMinDays(),
+                def.getArchiveMaxDays(), def.getArchiveDateProp()));
+    }
+
+    /**
+     * Shared engine invoked by each per-report method: for every configured brand it
+     * traverses the brand's root(s), applies the report's {@code filter} plus the
+     * exclusion rules, resolves the columns, caps at {@code maxRecords}, and writes
+     * {@code <outputFolder>/csv/<reportId>-<brand>.csv}. Each brand is isolated.
+     *
+     * @param definition the report configuration
+     * @param filter     the report's selection rule
+     * @return the run outcome (paths written + total rows)
+     */
+    private ReportRunResult runReport(final ReportDefinition definition, final ReportFilter filter) {
         final List<String> csvPaths = new ArrayList<>();
         long totalRows = 0;
         try (ResourceResolver resolver = getServiceResolver()) {
-            final ReportFilter filter = ReportFilterFactory.create(definition, LocalDate.now());
             final String csvFolder = definition.getOutputFolder() + "/csv";
 
             for (final BrandScope brand : definition.getBrands()) {

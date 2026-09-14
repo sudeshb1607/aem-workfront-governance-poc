@@ -102,9 +102,13 @@ node/
 coverage/
 reports/
 
-# ...but keep the AEM report components (the broad reports/ rule above must not swallow these)
+# ...but keep the project's "reports" source/content (the broad reports/ rule above must not swallow these)
 !ui.apps/src/main/content/jcr_root/apps/mysite/components/reports
 !ui.apps/src/main/content/jcr_root/apps/mysite/components/reports/**
+!core/src/main/java/com/mysite/core/reports
+!core/src/main/java/com/mysite/core/reports/**
+!core/src/test/java/com/mysite/core/reports
+!core/src/test/java/com/mysite/core/reports/**
 
 # Others
 dispatcher/src/conf.d/variables/default.vars
