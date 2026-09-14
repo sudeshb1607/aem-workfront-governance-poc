@@ -117,8 +117,9 @@ Everything below is deployed automatically by the Maven build (`ui.config`, `ui.
 ### 4.1 System user, service mapping & ACLs (auto, via repoinit)
 - **System user:** `workfront-csv-service` at `system/mysite`.
 - **Subservice mapping:** `com.mysite.mysite.core:workfront-csv-write=workfront-csv-service`
-  — `ui.config/.../config/org.apache.sling.serviceusermapping.impl.ServiceUserMapperImpl.amended~workfront.cfg.json`.
-- **Repoinit** — `ui.config/.../config/org.apache.sling.jcr.repoinit.RepositoryInitializer~mysitereports.cfg.json`
+  — `ui.config/.../config/org.apache.sling.serviceusermapping.impl.ServiceUserMapperImpl.amended-mysitereports.xml`
+  (a project-unique factory alias — do **not** reuse `~workfront`, it collides with any other project's amendment on a shared instance).
+- **Repoinit** — `ui.config/.../config/org.apache.sling.jcr.repoinit.RepositoryInitializer-mysitereports.xml`
   creates the user, the DAM folders, `/var/taskmanagement`, and grants:
   - `jcr:read` on `/content`
   - `jcr:read, rep:write, jcr:versionManagement, crx:replicate` on `/content/dam/mysite/workfront-reports`

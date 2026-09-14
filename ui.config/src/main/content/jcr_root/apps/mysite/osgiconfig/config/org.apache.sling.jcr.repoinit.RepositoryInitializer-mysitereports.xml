@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+    jcr:primaryType="sling:OsgiConfig"
+    scripts="[create service user workfront-csv-service with path system/mysite,create path (sling:OrderedFolder) /content/dam/mysite/workfront-reports,create path (sling:OrderedFolder) /content/dam/mysite/reports/all-live,create path (sling:Folder) /var/taskmanagement,set ACL for workfront-csv-service&#10;  allow jcr:read on /content&#10;  allow jcr:read\,rep:write\,jcr:versionManagement\,crx:replicate on /content/dam/mysite/workfront-reports&#10;  allow jcr:read\,rep:write\,jcr:versionManagement\,crx:replicate on /content/dam/mysite/reports/all-live&#10;  allow jcr:read\,rep:write on /var/taskmanagement&#10;end]"/>

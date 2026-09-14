@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jcr:root xmlns:sling="http://sling.apache.org/jcr/sling/1.0"
+          xmlns:jcr="http://www.jcp.org/jcr/1.0"
+    jcr:primaryType="sling:OsgiConfig"
+    webhookUrl="https://httpbin.org/post"
+    webhookSecret="dummy-workfront-secret"
+    signatureHeader="X-Workfront-Signature"
+    datasetHeader="X-Workfront-Dataset"
+    connectTimeoutMs="{Long}10000"
+    readTimeoutMs="{Long}30000"/>
