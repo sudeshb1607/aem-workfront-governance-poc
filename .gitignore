@@ -116,3 +116,6 @@ ui.tests.wdio/test-module/assets/form/themes/**/*diff.png
 ui.tests.wdio/test-module/assets/form/themes/**/*current.png
 # macOS
 .DS_Store
+
+# Stray content-package build artifact accidentally emitted into the source tree
+ui.config/src/main/content/jcr_root/apps/mysite/osgiconfig/config.author.zip
