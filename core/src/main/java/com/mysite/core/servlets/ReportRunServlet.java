@@ -69,7 +69,8 @@ public class ReportRunServlet extends SlingAllMethodsServlet {
 
         try {
             final ReportDefinition definition = ReportDefinitionReader.readOne(component);
-            final ReportRunResult result = reportService.generate(definition);
+            // Manual run-now: throttle off, so the HTTP request returns promptly.
+            final ReportRunResult result = reportService.generate(definition, false);
 
             final JsonArrayBuilder paths = Json.createArrayBuilder();
             result.getCsvPaths().forEach(paths::add);

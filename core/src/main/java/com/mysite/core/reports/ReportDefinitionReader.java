@@ -102,7 +102,10 @@ public final class ReportDefinitionReader {
                 ReportsConstants.DEFAULT_ARCHIVE_DATE_PROP);
         final List<String> excludePaths = readMultiValue(vm, ReportsConstants.PN_EXCLUDE_PATHS);
         final ExcludeProperty excludeProperty = readExcludeProperty(vm);
-        final int maxRecords = readInt(vm, ReportsConstants.PN_MAX_RECORDS, type.getDefaultMaxRecords());
+        // Enforce the hard cap on every read: even a direct CRXDE edit of
+        // maxRecords cannot raise a non-all-live report past HARD_CAP_MAX_RECORDS.
+        final int maxRecords = type.clampMaxRecords(
+                readInt(vm, ReportsConstants.PN_MAX_RECORDS, type.getDefaultMaxRecords()));
         final String outputFolder = StringUtils.removeEnd(
                 defaulted(vm.get(ReportsConstants.PN_OUTPUT_FOLDER, String.class),
                         type.getDefaultOutputFolder()), "/");
@@ -126,9 +129,9 @@ public final class ReportDefinitionReader {
             for (final Resource row : node.getChildren()) {
                 final ValueMap vm = row.getValueMap();
                 final String brand = StringUtils.trimToNull(vm.get(ReportsConstants.PN_BRAND_KEY, String.class));
-                final List<String> roots = readMultiValue(vm, ReportsConstants.PN_BRAND_ROOTS);
-                if (brand != null && !roots.isEmpty()) {
-                    brands.add(new BrandScope(brand, roots));
+                final String root = StringUtils.trimToNull(vm.get(ReportsConstants.PN_BRAND_ROOT, String.class));
+                if (brand != null && root != null) {
+                    brands.add(new BrandScope(brand, root));
                 } else {
                     LOG.warn("Skipping incomplete brand row at {}", row.getPath());
                 }
@@ -136,7 +139,7 @@ public final class ReportDefinitionReader {
         }
         if (brands.isEmpty()) {
             // Fall back to a single "all" scope so the report still runs.
-            brands.add(new BrandScope("all", java.util.Collections.singletonList("/content")));
+            brands.add(new BrandScope("all", "/content"));
         }
         return brands;
     }
@@ -160,25 +163,15 @@ public final class ReportDefinitionReader {
         return new ExcludeProperty(name, value);
     }
 
+    /**
+     * Columns are the fixed governance schema — the per-component Columns tab has
+     * been removed — so every report emits {@link ReportsConstants#defaultColumns()}.
+     *
+     * @param component the config component (unused; kept for call-site symmetry)
+     * @return the fixed default column set
+     */
     private static List<ReportColumn> readColumns(final Resource component) {
-        final List<ReportColumn> columns = new ArrayList<>();
-        final Resource node = component.getChild(ReportsConstants.PN_COLUMNS);
-        if (node != null) {
-            for (final Resource row : node.getChildren()) {
-                final ValueMap vm = row.getValueMap();
-                final String header = StringUtils.trimToNull(vm.get(ReportsConstants.PN_COLUMN_HEADER, String.class));
-                final String source = StringUtils.trimToNull(vm.get(ReportsConstants.PN_COLUMN_SOURCE, String.class));
-                if (header != null && source != null) {
-                    columns.add(new ReportColumn(header, source));
-                } else {
-                    LOG.warn("Skipping incomplete column row at {}", row.getPath());
-                }
-            }
-        }
-        if (columns.isEmpty()) {
-            columns.addAll(ReportsConstants.defaultColumns());
-        }
-        return columns;
+        return ReportsConstants.defaultColumns();
     }
 
     private static List<String> readMultiValue(final ValueMap vm, final String name) {

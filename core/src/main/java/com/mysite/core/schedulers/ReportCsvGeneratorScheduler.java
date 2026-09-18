@@ -3,12 +3,14 @@ package com.mysite.core.schedulers;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.Designate;
@@ -69,12 +71,20 @@ public class ReportCsvGeneratorScheduler implements Runnable {
     private String searchRoot;
     private int pauseBetweenReportsSeconds;
 
+    /** Counted down on deactivate so only a real component stop ends a run early. */
+    private final CountDownLatch stopLatch = new CountDownLatch(1);
+
     @Activate
     protected void activate(final Config config) {
         this.searchRoot = config.searchRoot();
         this.pauseBetweenReportsSeconds = Math.max(0, config.pauseBetweenReportsSeconds());
         LOG.info("ReportCsvGeneratorScheduler activated. searchRoot={}, pauseBetweenReportsSeconds={}",
                 searchRoot, pauseBetweenReportsSeconds);
+    }
+
+    @Deactivate
+    protected void deactivate() {
+        stopLatch.countDown();
     }
 
     @Override
@@ -90,8 +100,8 @@ public class ReportCsvGeneratorScheduler implements Runnable {
 
             for (int i = 0; i < definitions.size(); i++) {
                 generateOne(resolver, definitions.get(i));
-                if (i < definitions.size() - 1 && !SchedulerSupport.pause(pauseBetweenReportsSeconds)) {
-                    LOG.warn("Report generation interrupted during cool-down; stopping run.");
+                if (i < definitions.size() - 1 && !SchedulerSupport.await(pauseBetweenReportsSeconds, stopLatch)) {
+                    LOG.warn("Report generation stopping (component deactivating) during cool-down.");
                     break;
                 }
             }
@@ -105,7 +115,8 @@ public class ReportCsvGeneratorScheduler implements Runnable {
 
     private void generateOne(final ResourceResolver resolver, final ReportDefinition definition) {
         try {
-            final ReportRunResult result = reportService.generate(definition);
+            // Scheduled run: throttle on (full per-batch and per-brand cool-downs).
+            final ReportRunResult result = reportService.generate(definition, true);
             if (result.isSuccess()) {
                 LOG.info("Report '{}' generated {} CSV(s), {} row(s) total",
                         definition.getReportId(), result.getCsvPaths().size(), result.getTotalRows());

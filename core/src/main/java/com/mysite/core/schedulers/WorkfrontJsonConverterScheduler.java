@@ -2,6 +2,7 @@ package com.mysite.core.schedulers;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.sling.api.resource.LoginException;
@@ -10,6 +11,7 @@ import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.Designate;
@@ -78,6 +80,9 @@ public class WorkfrontJsonConverterScheduler implements Runnable {
     private int retryBackoffSeconds;
     private int pauseBetweenFilesSeconds;
 
+    /** Counted down on deactivate so only a real component stop ends a run early. */
+    private final CountDownLatch stopLatch = new CountDownLatch(1);
+
     @Activate
     protected void activate(final Config config) {
         this.reportsRoot = StringUtils.removeEnd(
@@ -88,6 +93,11 @@ public class WorkfrontJsonConverterScheduler implements Runnable {
         LOG.info("WorkfrontJsonConverterScheduler activated. reportsRoot={}, maxAttempts={}, "
                         + "retryBackoffSeconds={}, pauseBetweenFilesSeconds={}",
                 reportsRoot, maxAttempts, retryBackoffSeconds, pauseBetweenFilesSeconds);
+    }
+
+    @Deactivate
+    protected void deactivate() {
+        stopLatch.countDown();
     }
 
     @Override
@@ -117,8 +127,8 @@ public class WorkfrontJsonConverterScheduler implements Runnable {
                     } else {
                         failed++;
                     }
-                    if (!SchedulerSupport.pause(pauseBetweenFilesSeconds)) {
-                        LOG.warn("Workfront JSON conversion interrupted during cool-down; stopping run.");
+                    if (!SchedulerSupport.await(pauseBetweenFilesSeconds, stopLatch)) {
+                        LOG.warn("Workfront JSON conversion stopping (component deactivating) during cool-down.");
                         LOG.info("Conversion complete. {} converted, {} failed.", converted, failed);
                         return;
                     }
@@ -151,8 +161,8 @@ public class WorkfrontJsonConverterScheduler implements Runnable {
             } catch (final Exception e) {
                 LOG.warn("Conversion attempt {}/{} threw for {}", attempt, maxAttempts, csvAsset.getPath(), e);
             }
-            if (attempt < maxAttempts && !SchedulerSupport.pause(retryBackoffSeconds)) {
-                LOG.warn("Interrupted during retry backoff for {}; aborting file.", csvAsset.getPath());
+            if (attempt < maxAttempts && !SchedulerSupport.await(retryBackoffSeconds, stopLatch)) {
+                LOG.warn("Deactivating during retry backoff for {}; aborting file.", csvAsset.getPath());
                 break;
             }
         }

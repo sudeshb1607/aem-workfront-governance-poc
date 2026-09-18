@@ -4,7 +4,7 @@
     <cq:listeners
         jcr:primaryType="cq:EditListenersConfig"
         afterdelete="REFRESH_PAGE"
-        afteredit="REFRESH_PAGE"
+        afteredit="REFRESH_SELF"
         afterinsert="REFRESH_PAGE"
         aftermove="REFRESH_PAGE"/>
 </jcr:root>

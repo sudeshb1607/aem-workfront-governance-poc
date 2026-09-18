@@ -78,19 +78,19 @@ class ReportCsvGeneratorSchedulerTest {
         context.build().resource("/content/cfg/stale",
                 "sling:resourceType", ReportType.NOT_LIVE_STALE.getResourceType()).commit();
         stubQueryReturns(context.resourceResolver().getResource("/content/cfg/stale"));
-        when(reportService.generate(any())).thenReturn(ReportRunResult.success(
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(true))).thenReturn(ReportRunResult.success(
                 Collections.singletonList("/content/dam/mysite/workfront-reports/not-live-stale/csv/x.csv"), 3));
 
         scheduler.run();
 
-        verify(reportService, atLeastOnce()).generate(any());
+        verify(reportService, atLeastOnce()).generate(any(), org.mockito.ArgumentMatchers.eq(true));
     }
 
     @Test
     void noConfigsMeansNoGeneration() throws Exception {
         stubQueryReturns(null);
         scheduler.run();
-        verify(reportService, never()).generate(any());
+        verify(reportService, never()).generate(any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -98,10 +98,10 @@ class ReportCsvGeneratorSchedulerTest {
         context.build().resource("/content/cfg/stale",
                 "sling:resourceType", ReportType.NOT_LIVE_STALE.getResourceType()).commit();
         stubQueryReturns(context.resourceResolver().getResource("/content/cfg/stale"));
-        when(reportService.generate(any())).thenReturn(ReportRunResult.failure("boom"));
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(true))).thenReturn(ReportRunResult.failure("boom"));
 
         scheduler.run();
-        verify(reportService, atLeastOnce()).generate(any());
+        verify(reportService, atLeastOnce()).generate(any(), org.mockito.ArgumentMatchers.eq(true));
     }
 
     @Test
@@ -109,10 +109,10 @@ class ReportCsvGeneratorSchedulerTest {
         context.build().resource("/content/cfg/stale",
                 "sling:resourceType", ReportType.NOT_LIVE_STALE.getResourceType()).commit();
         stubQueryReturns(context.resourceResolver().getResource("/content/cfg/stale"));
-        when(reportService.generate(any())).thenThrow(new RuntimeException("boom"));
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(true))).thenThrow(new RuntimeException("boom"));
 
         scheduler.run();
-        verify(reportService, atLeastOnce()).generate(any());
+        verify(reportService, atLeastOnce()).generate(any(), org.mockito.ArgumentMatchers.eq(true));
     }
 
     private static void setField(final Object target, final String name, final Object value) throws Exception {

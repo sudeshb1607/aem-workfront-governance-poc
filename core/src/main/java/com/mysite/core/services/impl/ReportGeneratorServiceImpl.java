@@ -13,7 +13,9 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
+import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +26,7 @@ import org.apache.sling.api.resource.ResourceResolverFactory;
 import org.apache.sling.api.resource.ValueMap;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferencePolicy;
@@ -53,10 +56,12 @@ import com.mysite.core.reports.filter.ArchiveAgedFilter;
 import com.mysite.core.reports.filter.ExpiringPublishedFilter;
 import com.mysite.core.reports.filter.LiveLongNoChildrenFilter;
 import com.mysite.core.reports.filter.NotLiveStaleFilter;
+import com.mysite.core.schedulers.SchedulerSupport;
 import com.mysite.core.services.ReportGeneratorService;
 import com.mysite.core.util.BrandUtil;
 import com.mysite.core.util.CsvSupport;
 import com.mysite.core.util.DateUtils;
+import com.mysite.core.util.DurationUtil;
 import com.mysite.core.util.PagePublicationUtil;
 import com.mysite.core.util.PageHashUtil;
 
@@ -91,8 +96,14 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     public @interface Config {
 
         @AttributeDefinition(name = "Page Batch Size",
-                description = "Number of pages fetched per QueryBuilder batch. Keeps memory flat on large trees.")
-        int pageBatchSize() default 500;
+                description = "Number of pages fetched per QueryBuilder batch. Keeps memory flat on large trees "
+                        + "and bounds how long the author works before each cool-down.")
+        int pageBatchSize() default 200;
+
+        @AttributeDefinition(name = "Cool-down (seconds)",
+                description = "Real cool-down taken after each batch and after each brand when throttling is on "
+                        + "(scheduled runs), so a shared author stays responsive. Set to 0 to disable.")
+        int cooldownSeconds() default 10;
     }
 
     @Reference
@@ -109,27 +120,47 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     private volatile Externalizer externalizer;
 
     private int pageBatchSize;
+    private int cooldownSeconds;
+
+    /**
+     * Counted down in {@link #deactivate()}. The cool-downs wait on this latch, so
+     * only a genuine component stop (shutdown / bundle refresh / reconfigure) ends
+     * a run early — a spurious thread interrupt does not abort the remaining work.
+     */
+    private final CountDownLatch stopLatch = new CountDownLatch(1);
 
     @Activate
     protected void activate(final Config config) {
-        this.pageBatchSize = config.pageBatchSize() > 0 ? config.pageBatchSize() : 500;
-        LOG.info("ReportGeneratorService activated. pageBatchSize={}", pageBatchSize);
+        this.pageBatchSize = config.pageBatchSize() > 0 ? config.pageBatchSize() : 200;
+        this.cooldownSeconds = Math.max(0, config.cooldownSeconds());
+        LOG.info("ReportGeneratorService activated. pageBatchSize={}, cooldownSeconds={}",
+                pageBatchSize, cooldownSeconds);
+    }
+
+    @Deactivate
+    protected void deactivate() {
+        stopLatch.countDown();
     }
 
     @Override
     public ReportRunResult generate(final ReportDefinition definition) {
+        return generate(definition, true);
+    }
+
+    @Override
+    public ReportRunResult generate(final ReportDefinition definition, final boolean throttle) {
         final LocalDate today = LocalDate.now();
         switch (definition.getType()) {
             case ALL_LIVE:
-                return generateAllLive(definition, today);
+                return generateAllLive(definition, today, throttle);
             case EXPIRING_PUBLISHED:
-                return generateExpiringPublished(definition, today);
+                return generateExpiringPublished(definition, today, throttle);
             case NOT_LIVE_STALE:
-                return generateNotLiveStale(definition, today);
+                return generateNotLiveStale(definition, today, throttle);
             case LIVE_LONG_NO_CHILDREN:
-                return generateLiveLongNoChildren(definition, today);
+                return generateLiveLongNoChildren(definition, today, throttle);
             case ARCHIVE_AGED:
-                return generateArchiveAged(definition, today);
+                return generateArchiveAged(definition, today, throttle);
             default:
                 LOG.error("Unknown report type for config {}", definition.getComponentPath());
                 return ReportRunResult.failure("Unknown report type");
@@ -142,29 +173,34 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     // traverse + filter + CSV-write mechanics.
 
     /** Report 1 — all live (published) pages under the configured paths. */
-    private ReportRunResult generateAllLive(final ReportDefinition def, final LocalDate today) {
-        return runReport(def, new AllLiveFilter());
+    private ReportRunResult generateAllLive(final ReportDefinition def, final LocalDate today, final boolean throttle) {
+        return runReport(def, new AllLiveFilter(), throttle);
     }
 
     /** Report 2 — published pages expiring within the threshold (or already expired). */
-    private ReportRunResult generateExpiringPublished(final ReportDefinition def, final LocalDate today) {
-        return runReport(def, new ExpiringPublishedFilter(today, def.getThresholdDays()));
+    private ReportRunResult generateExpiringPublished(final ReportDefinition def, final LocalDate today,
+                                                      final boolean throttle) {
+        return runReport(def, new ExpiringPublishedFilter(today, def.getThresholdDays()), throttle);
     }
 
     /** Report 3 — not-live pages not modified within the threshold window. */
-    private ReportRunResult generateNotLiveStale(final ReportDefinition def, final LocalDate today) {
-        return runReport(def, new NotLiveStaleFilter(today, def.getThresholdMonths(), def.getStaleDateProp()));
+    private ReportRunResult generateNotLiveStale(final ReportDefinition def, final LocalDate today,
+                                                 final boolean throttle) {
+        return runReport(def, new NotLiveStaleFilter(today, def.getThresholdMonths(), def.getStaleDateProp()),
+                throttle);
     }
 
     /** Report 4 — live pages last published beyond the threshold, with no child page. */
-    private ReportRunResult generateLiveLongNoChildren(final ReportDefinition def, final LocalDate today) {
-        return runReport(def, new LiveLongNoChildrenFilter(today, def.getThresholdMonths()));
+    private ReportRunResult generateLiveLongNoChildren(final ReportDefinition def, final LocalDate today,
+                                                       final boolean throttle) {
+        return runReport(def, new LiveLongNoChildrenFilter(today, def.getThresholdMonths()), throttle);
     }
 
     /** Report 5 — pages in the archive folders aged within the [min,max] day window. */
-    private ReportRunResult generateArchiveAged(final ReportDefinition def, final LocalDate today) {
+    private ReportRunResult generateArchiveAged(final ReportDefinition def, final LocalDate today,
+                                                final boolean throttle) {
         return runReport(def, new ArchiveAgedFilter(today, def.getArchiveMinDays(),
-                def.getArchiveMaxDays(), def.getArchiveDateProp()));
+                def.getArchiveMaxDays(), def.getArchiveDateProp()), throttle);
     }
 
     /**
@@ -175,19 +211,23 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
      *
      * @param definition the report configuration
      * @param filter     the report's selection rule
+     * @param throttle   when {@code true}, take a cool-down after each brand
      * @return the run outcome (paths written + total rows)
      */
-    private ReportRunResult runReport(final ReportDefinition definition, final ReportFilter filter) {
+    private ReportRunResult runReport(final ReportDefinition definition, final ReportFilter filter,
+                                      final boolean throttle) {
         final List<String> csvPaths = new ArrayList<>();
         long totalRows = 0;
         try (ResourceResolver resolver = getServiceResolver()) {
             final String csvFolder = definition.getOutputFolder() + "/csv";
+            final List<BrandScope> brands = definition.getBrands();
 
-            for (final BrandScope brand : definition.getBrands()) {
+            for (int i = 0; i < brands.size(); i++) {
+                final BrandScope brand = brands.get(i);
                 try {
                     final String csvPath = csvFolder + "/" + definition.getReportId()
                             + "-" + BrandUtil.sanitize(brand.getBrand()) + CSV_EXTENSION;
-                    final long rows = generateBrand(resolver, definition, filter, brand, csvPath);
+                    final long rows = generateBrand(resolver, definition, filter, brand, csvPath, throttle);
                     csvPaths.add(csvPath);
                     totalRows += rows;
                     LOG.info("Report '{}' brand '{}': {} row(s) -> {}",
@@ -195,6 +235,16 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 } catch (final Exception e) {
                     LOG.error("Report '{}' failed for brand '{}' (config {})",
                             definition.getReportId(), brand.getBrand(), definition.getComponentPath(), e);
+                }
+                // Breathe after each brand (except the last) so the shared author recovers.
+                if (throttle && cooldownSeconds > 0 && i < brands.size() - 1) {
+                    LOG.info("Report '{}': brand cool-off {}",
+                            definition.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
+                    if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
+                        LOG.warn("Report '{}': deactivating during brand cool-down; stopping run",
+                                definition.getReportId());
+                        break;
+                    }
                 }
             }
             return ReportRunResult.success(csvPaths, totalRows);
@@ -209,44 +259,52 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
 
     /**
      * Generates one brand's CSV and returns the number of data rows written.
+     * Times the brand and logs the elapsed duration in human-readable form.
      */
     private long generateBrand(final ResourceResolver resolver, final ReportDefinition def,
-                               final ReportFilter filter, final BrandScope brand, final String csvPath)
+                               final ReportFilter filter, final BrandScope brand, final String csvPath,
+                               final boolean throttle)
             throws Exception {
+        final long startNanos = System.nanoTime();
         final StringBuilder csv = new StringBuilder();
         appendHeader(csv, def.getColumns());
 
-        final int cap = def.getMaxRecords(); // 0 = unlimited
+        final int cap = def.getMaxRecords(); // 0 = unlimited (all-live only)
         long rows = 0;
-        for (final String root : brand.getRoots()) {
-            if (resolver.getResource(root) == null) {
-                LOG.warn("Report '{}' brand '{}': root {} does not exist; skipping",
-                        def.getReportId(), brand.getBrand(), root);
-                continue;
-            }
-            rows += appendRoot(resolver, root, def, filter, csv, rows, cap);
-            if (cap > 0 && rows >= cap) {
-                LOG.debug("Report '{}' brand '{}': record cap {} reached", def.getReportId(), brand.getBrand(), cap);
-                break;
-            }
+        final String root = brand.getRoot();
+        if (resolver.getResource(root) == null) {
+            LOG.warn("Report '{}' brand '{}': root {} does not exist; writing header-only CSV",
+                    def.getReportId(), brand.getBrand(), root);
+        } else {
+            rows = appendRoot(resolver, root, def, filter, csv, cap, throttle);
         }
 
         writeAsset(resolver, csvPath, csv.toString());
         if (def.isActivateCsv()) {
             replicate(resolver, csvPath);
         }
+
+        final long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
+        LOG.info("Report '{}' brand '{}': completed {} rows in {}",
+                def.getReportId(), brand.getBrand(), rows, DurationUtil.format(elapsedMillis));
         return rows;
     }
 
     /**
-     * Appends qualifying pages under one root, respecting the remaining record cap.
+     * Appends qualifying pages under the brand's root, respecting the record cap.
+     * Traverses in bounded QueryBuilder batches; after each batch it refreshes the
+     * JCR session (so the session never goes stale on a long run) and, when
+     * {@code throttle} is on, takes a real cool-down so a shared author can breathe.
+     * Deterministic paging ({@code orderby=path} + {@code p.offset}) prevents
+     * duplicate/overlapping rows without holding a dedup Set in memory.
      *
-     * @param alreadyWritten rows already written for this brand (across earlier roots)
-     * @return the number of rows appended for this root
+     * @param cap      the per-brand record cap ({@code 0} = unlimited)
+     * @param throttle when {@code true}, cool-down between batches
+     * @return the number of rows appended for this brand
      */
     private long appendRoot(final ResourceResolver resolver, final String root, final ReportDefinition def,
                             final ReportFilter filter, final StringBuilder csv,
-                            final long alreadyWritten, final int cap) {
+                            final int cap, final boolean throttle) {
         final Session session = resolver.adaptTo(Session.class);
         long appended = 0;
         int offset = 0;
@@ -270,7 +328,7 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 try {
                     if (appendPageRowIfMatched(resolver, hit.getResource(), def, filter, csv)) {
                         appended++;
-                        if (cap > 0 && alreadyWritten + appended >= cap) {
+                        if (cap > 0 && appended >= cap) {
                             return appended;
                         }
                     }
@@ -279,12 +337,38 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 }
             }
 
+            // Keep the session fresh across a long traversal (avoids stale/timeout).
+            refreshSession(session, def);
+            LOG.info("Report '{}': batch @offset {} fetched {} page(s), {} row(s) so far",
+                    def.getReportId(), offset, batchCount, appended);
+
             if (batchCount < pageBatchSize) {
                 break;
             }
             offset += pageBatchSize;
+
+            if (throttle && cooldownSeconds > 0) {
+                LOG.info("Report '{}': batch cool-off {}",
+                        def.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
+                if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
+                    LOG.warn("Report '{}': deactivating during batch cool-down; stopping traversal",
+                            def.getReportId());
+                    break;
+                }
+            }
         }
         return appended;
+    }
+
+    private void refreshSession(final Session session, final ReportDefinition def) {
+        if (session == null) {
+            return;
+        }
+        try {
+            session.refresh(false);
+        } catch (final RepositoryException e) {
+            LOG.debug("Session refresh failed during report '{}' (continuing)", def.getReportId(), e);
+        }
     }
 
     /**

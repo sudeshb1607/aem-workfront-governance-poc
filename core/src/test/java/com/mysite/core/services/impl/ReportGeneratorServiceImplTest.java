@@ -142,7 +142,7 @@ class ReportGeneratorServiceImplTest {
                 .resource(base, "sling:resourceType", ReportType.NOT_LIVE_STALE.getResourceType(),
                         "thresholdMonths", 6L, "maxRecords", (long) maxRecords,
                         "outputFolder", "/content/dam/mysite/workfront-reports/not-live-stale")
-                .resource(base + "/brands/item0", "brand", brand, "rootPaths", new String[]{root})
+                .resource(base + "/brands/item0", "brand", brand, "rootPath", root)
                 .commit();
         return ReportDefinitionReader.readOne(context.resourceResolver().getResource(base));
     }
@@ -348,7 +348,7 @@ class ReportGeneratorServiceImplTest {
                 "sling:resourceType", ReportType.ALL_LIVE.getResourceType(),
                 "outputFolder", "/content/dam/mysite/reports/all-live",
                 "activateCsv", Boolean.TRUE)
-                .resource("/content/cfg/wr/brands/item0", "brand", "mysite", "rootPaths", new String[]{"/content/x"})
+                .resource("/content/cfg/wr/brands/item0", "brand", "mysite", "rootPath", "/content/x")
                 .commit();
         final ReportDefinition def = ReportDefinitionReader.readOne(
                 context.resourceResolver().getResource("/content/cfg/wr"));
@@ -371,13 +371,16 @@ class ReportGeneratorServiceImplTest {
 
     @Test
     void resolvesUrlViaExternalizerAndJoinsMultiValues() throws Exception {
-        context.build().resource("/content/cfg/cols",
-                "sling:resourceType", ReportType.ALL_LIVE.getResourceType())
-                .resource("/content/cfg/cols/columns/item0", "header", "URL", "source", ":url")
-                .resource("/content/cfg/cols/columns/item1", "header", "Tags", "source", "tags")
-                .commit();
-        final ReportDefinition def = ReportDefinitionReader.readOne(
-                context.resourceResolver().getResource("/content/cfg/cols"));
+        // Columns are the fixed schema now, so build a definition directly with the
+        // two columns under test (:url token + a multi-value property).
+        final ReportDefinition def = new ReportDefinition(
+                "/content/cfg/cols", ReportType.ALL_LIVE,
+                java.util.Collections.singletonList(new com.mysite.core.reports.BrandScope("all", "/content")),
+                0, 0, "cq:lastModified", 0, 0, "cq:lastModified",
+                java.util.Collections.emptyList(), null, 0, "/content/dam/x", false, false,
+                java.util.Arrays.asList(
+                        new com.mysite.core.models.report.ReportColumn("URL", ":url"),
+                        new com.mysite.core.models.report.ReportColumn("Tags", "tags")));
 
         final Resource p = page("/content/natwest/p",
                 "jcr:primaryType", "cq:PageContent", "tags", new String[]{"a", "b"});

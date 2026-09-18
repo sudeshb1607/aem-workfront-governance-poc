@@ -1,22 +1,19 @@
 package com.mysite.core.reports;
 
-import java.util.Collections;
-import java.util.List;
-
 /**
- * A brand (e.g. NatWest / RBS / Ulster) and the content root path(s) that make up
- * its scope for a report. Each brand yields one CSV per report
- * ({@code <reportId>-<brand>.csv}). For the archive-aged report the roots are the
- * configured archive folders.
+ * A brand (e.g. NatWest / RBS / Ulster) and the single content root path that
+ * makes up its scope for a report. Each brand yields one CSV per report
+ * ({@code <reportId>-<brand>.csv}). For the archive-aged report the root is the
+ * configured archive folder.
  */
 public final class BrandScope {
 
     private final String brand;
-    private final List<String> roots;
+    private final String root;
 
-    public BrandScope(final String brand, final List<String> roots) {
+    public BrandScope(final String brand, final String root) {
         this.brand = brand;
-        this.roots = roots != null ? Collections.unmodifiableList(roots) : Collections.emptyList();
+        this.root = root;
     }
 
     /** @return the brand key (also the file-name/dataset suffix after sanitising). */
@@ -24,13 +21,13 @@ public final class BrandScope {
         return brand;
     }
 
-    /** @return the content root path(s) scanned for this brand. */
-    public List<String> getRoots() {
-        return roots;
+    /** @return the single content root path scanned for this brand. */
+    public String getRoot() {
+        return root;
     }
 
     @Override
     public String toString() {
-        return "BrandScope{brand='" + brand + "', roots=" + roots + '}';
+        return "BrandScope{brand='" + brand + "', root='" + root + "'}";
     }
 }

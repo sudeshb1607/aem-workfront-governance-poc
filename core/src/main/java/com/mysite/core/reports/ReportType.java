@@ -61,6 +61,28 @@ public enum ReportType {
     }
 
     /**
+     * Clamps a requested per-brand record cap so it can never exceed the hard
+     * limit. {@code ALL_LIVE} is unlimited (a full DAM-only export), so its cap
+     * is only floored at {@code 0}. Every other report is forced into
+     * {@code [1..HARD_CAP_MAX_RECORDS]}: a value {@code <= 0} or greater than the
+     * hard cap becomes {@link ReportsConstants#HARD_CAP_MAX_RECORDS}. This runs
+     * on every read, so the limit holds even if {@code maxRecords} is edited
+     * directly in CRXDE.
+     *
+     * @param requested the configured value (already non-negative)
+     * @return the enforced cap
+     */
+    public int clampMaxRecords(final int requested) {
+        if (this == ALL_LIVE) {
+            return Math.max(0, requested);
+        }
+        if (requested <= 0 || requested > ReportsConstants.HARD_CAP_MAX_RECORDS) {
+            return ReportsConstants.HARD_CAP_MAX_RECORDS;
+        }
+        return requested;
+    }
+
+    /**
      * @return the default DAM base folder for this report: a fixed folder for
      *         {@code ALL_LIVE}, otherwise {@code <reportsRoot>/<reportId>}.
      */

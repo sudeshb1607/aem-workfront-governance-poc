@@ -17,13 +17,27 @@ import com.mysite.core.reports.ReportDefinition;
 public interface ReportGeneratorService {
 
     /**
-     * Generates every per-brand CSV for the given report definition. Each brand is
-     * isolated: a failure on one brand does not prevent the others.
+     * Generates every per-brand CSV for the given report definition, with the full
+     * author-protection cool-downs enabled (equivalent to {@code generate(definition, true)}).
+     * Each brand is isolated: a failure on one brand does not prevent the others.
      *
      * @param definition the report configuration snapshot
      * @return the outcome (paths written + total rows); never {@code null}
      */
     ReportRunResult generate(ReportDefinition definition);
+
+    /**
+     * Generates every per-brand CSV for the given report definition.
+     *
+     * @param definition the report configuration snapshot
+     * @param throttle   when {@code true}, take the configured cool-down after each
+     *                   batch and after each brand (used by the scheduled run so the
+     *                   shared author stays responsive); when {@code false}, run
+     *                   straight through with no cool-downs (used by the on-demand
+     *                   run-now servlet so the HTTP request returns promptly)
+     * @return the outcome (paths written + total rows); never {@code null}
+     */
+    ReportRunResult generate(ReportDefinition definition, boolean throttle);
 
     /**
      * Immutable outcome of a report generation run (across all brands).

@@ -25,7 +25,7 @@
                                 jcr:primaryType="nt:unstructured"
                                 sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
                                 fieldLabel="Brands"
-                                fieldDescription="Each brand and its content root path(s). One CSV is produced per brand."
+                                fieldDescription="Each brand and its single content root. One CSV is produced per brand."
                                 composite="{Boolean}true">
                                 <field
                                     jcr:primaryType="nt:unstructured"
@@ -38,17 +38,16 @@
                                             fieldLabel="Brand"
                                             fieldDescription="e.g. natwest, rbs, ulster (used in the file/dataset name)."
                                             name="./brand"/>
-                                        <rootPaths
+                                        <rootPath
                                             jcr:primaryType="nt:unstructured"
-                                            sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
-                                            fieldLabel="Content Roots">
-                                            <field
+                                            sling:resourceType="granite/ui/components/coral/foundation/form/select"
+                                            fieldLabel="Content Root"
+                                            fieldDescription="The single site root under /content scanned for this brand."
+                                            name="./rootPath">
+                                            <datasource
                                                 jcr:primaryType="nt:unstructured"
-                                                sling:resourceType="granite/ui/components/coral/foundation/form/pathfield"
-                                                fieldLabel="Content Root"
-                                                name="./rootPaths"
-                                                rootPath="/content"/>
-                                        </rootPaths>
+                                                sling:resourceType="mysite/datasource/report-brand-roots"/>
+                                        </rootPath>
                                     </items>
                                 </field>
                             </brands>
@@ -131,9 +130,10 @@
                                 jcr:primaryType="nt:unstructured"
                                 sling:resourceType="granite/ui/components/coral/foundation/form/numberfield"
                                 fieldLabel="Max Records per Brand"
-                                fieldDescription="0 or empty = unlimited. Workfront reports are capped (default 1000)."
+                                fieldDescription="1–1000. Workfront reports are hard-capped at 1000 rows per brand."
                                 name="./maxRecords"
-                                min="{Long}0"
+                                min="{Long}1"
+                                max="{Long}1000"
                                 value="1000"/>
                             <activateCsv
                                 jcr:primaryType="nt:unstructured"
@@ -154,38 +154,6 @@
                                 value="{Boolean}true"/>
                         </items>
                     </output>
-                    <columns
-                        jcr:primaryType="nt:unstructured"
-                        jcr:title="Columns"
-                        sling:resourceType="granite/ui/components/coral/foundation/container"
-                        margin="{Boolean}true">
-                        <items jcr:primaryType="nt:unstructured">
-                            <columns
-                                jcr:primaryType="nt:unstructured"
-                                sling:resourceType="granite/ui/components/coral/foundation/form/multifield"
-                                fieldLabel="Columns"
-                                fieldDescription="Source is a jcr:content property or a token: :title, :path, :url, :hash, :brand, :published, :daysToReview. Defaults to the governance schema when empty."
-                                composite="{Boolean}true">
-                                <field
-                                    jcr:primaryType="nt:unstructured"
-                                    sling:resourceType="granite/ui/components/coral/foundation/container"
-                                    name="./columns">
-                                    <items jcr:primaryType="nt:unstructured">
-                                        <header
-                                            jcr:primaryType="nt:unstructured"
-                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
-                                            fieldLabel="Header"
-                                            name="./header"/>
-                                        <source
-                                            jcr:primaryType="nt:unstructured"
-                                            sling:resourceType="granite/ui/components/coral/foundation/form/textfield"
-                                            fieldLabel="Source"
-                                            name="./source"/>
-                                    </items>
-                                </field>
-                            </columns>
-                        </items>
-                    </columns>
                 </items>
             </tabs>
         </items>

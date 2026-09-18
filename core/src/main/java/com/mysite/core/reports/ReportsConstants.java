@@ -24,10 +24,10 @@ public final class ReportsConstants {
     /** Fixed DAM folder for the all-live report (DAM-only, not sent). */
     public static final String ALL_LIVE_OUTPUT_FOLDER = "/content/dam/mysite/reports/all-live";
 
-    // --- Composite multifield: brands, each with one or more content root paths. ---
+    // --- Composite multifield: brands, each with exactly one content root path. ---
     public static final String PN_BRANDS = "brands";
     public static final String PN_BRAND_KEY = "brand";
-    public static final String PN_BRAND_ROOTS = "rootPaths";
+    public static final String PN_BRAND_ROOT = "rootPath";
 
     // --- Rule thresholds (only the relevant one(s) apply per report type). ---
     public static final String PN_THRESHOLD_DAYS = "thresholdDays";     // expiring-published
@@ -43,13 +43,11 @@ public final class ReportsConstants {
     public static final String PN_EXCLUDE_PROPERTY_NAME = "excludePropertyName";
     public static final String PN_EXCLUDE_PROPERTY_VALUE = "excludePropertyValue";
 
-    // --- Output & columns. ---
+    // --- Output. Columns are the fixed governance schema (defaultColumns()); the
+    //     per-component Columns tab has been removed. ---
     public static final String PN_MAX_RECORDS = "maxRecords";
     public static final String PN_OUTPUT_FOLDER = "outputFolder";
     public static final String PN_ACTIVATE_CSV = "activateCsv";
-    public static final String PN_COLUMNS = "columns";
-    public static final String PN_COLUMN_HEADER = "header";
-    public static final String PN_COLUMN_SOURCE = "source";
 
     // --- Column source tokens (resolved by the report engine). ---
     public static final String SOURCE_TITLE = ":title";
@@ -73,6 +71,12 @@ public final class ReportsConstants {
     public static final int DEFAULT_ARCHIVE_MAX_DAYS = 90;  // archive-aged
     public static final String DEFAULT_ARCHIVE_DATE_PROP = "cq:lastModified";
     public static final int DEFAULT_MAX_RECORDS = 1000;
+    /**
+     * Absolute per-brand record cap enforced for every report except all-live.
+     * The cap cannot be raised past this value, even by editing {@code maxRecords}
+     * directly in CRXDE — {@link ReportType#clampMaxRecords(int)} clamps to it.
+     */
+    public static final int HARD_CAP_MAX_RECORDS = 1000;
     /** Value assumed when an exclusion property name is set but no value is chosen. */
     public static final String DEFAULT_EXCLUDE_PROPERTY_VALUE = "true";
 

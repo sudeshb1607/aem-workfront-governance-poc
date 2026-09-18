@@ -46,7 +46,7 @@ class ReportRunServletTest {
     void generatesReportForValidComponent() throws Exception {
         context.create().resource(COMPONENT_PATH,
                 "sling:resourceType", ReportType.EXPIRING_PUBLISHED.getResourceType());
-        when(reportService.generate(any())).thenReturn(ReportRunResult.success(
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(false))).thenReturn(ReportRunResult.success(
                 Arrays.asList("/content/dam/mysite/workfront-reports/expiring-published/csv/expiring-published-natwest.csv"),
                 12));
 
@@ -65,7 +65,7 @@ class ReportRunServletTest {
     void reportsFailureAsInternalError() throws Exception {
         context.create().resource(COMPONENT_PATH,
                 "sling:resourceType", ReportType.ARCHIVE_AGED.getResourceType());
-        when(reportService.generate(any())).thenReturn(ReportRunResult.failure("disk full"));
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(false))).thenReturn(ReportRunResult.failure("disk full"));
 
         context.request().setParameterMap(Collections.singletonMap("configPath", COMPONENT_PATH));
         servlet.doPost(context.request(), context.response());
@@ -78,7 +78,7 @@ class ReportRunServletTest {
     void handlesServiceExceptionAsInternalError() throws Exception {
         context.create().resource(COMPONENT_PATH,
                 "sling:resourceType", ReportType.ALL_LIVE.getResourceType());
-        when(reportService.generate(any())).thenThrow(new RuntimeException("kaboom"));
+        when(reportService.generate(any(), org.mockito.ArgumentMatchers.eq(false))).thenThrow(new RuntimeException("kaboom"));
 
         context.request().setParameterMap(Collections.singletonMap("configPath", COMPONENT_PATH));
         servlet.doPost(context.request(), context.response());

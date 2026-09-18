@@ -18,8 +18,7 @@
                     <tr>
                         <td style="padding:4px; border-bottom:1px solid #eee; font-weight:bold;">Brands</td>
                         <td style="padding:4px; border-bottom:1px solid #eee;">
-                            <sly data-sly-list.b="${model.definition.brands}">${b.brand} (<sly
-                                data-sly-list.r="${b.roots}">${r}<sly data-sly-test="${rList.last != true}">, </sly></sly>)<sly
+                            <sly data-sly-list.b="${model.definition.brands}">${b.brand} (${b.root})<sly
                                 data-sly-test="${bList.last != true}">; </sly></sly>
                         </td>
                     </tr>

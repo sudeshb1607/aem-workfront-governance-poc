@@ -46,19 +46,19 @@ class ReportDefinitionReaderTest {
     }
 
     @Test
-    void skipsIncompleteBrandAndColumnRowsAndReadsExcludeProperty() {
+    void skipsIncompleteBrandRowsAndReadsExcludeProperty() {
         final String base = "/content/cfg/incomplete";
         context.build()
                 .resource(base, "sling:resourceType", ReportType.NOT_LIVE_STALE.getResourceType(),
                         "excludePropertyName", "excludeFromReport", "excludePropertyValue", "true")
-                .resource(base + "/brands/item0", "brand", "natwest", "rootPaths", new String[]{"/content/natwest"})
-                .resource(base + "/brands/item1", "brand", "no-roots")            // no rootPaths -> skipped
-                .resource(base + "/columns/item0", "header", "Path", "source", ":path")
-                .resource(base + "/columns/item1", "header", "OnlyHeader")         // no source -> skipped
+                .resource(base + "/brands/item0", "brand", "natwest", "rootPath", "/content/natwest")
+                .resource(base + "/brands/item1", "brand", "no-root")             // no rootPath -> skipped
                 .commit();
         final ReportDefinition def = readAt(base);
         assertEquals(1, def.getBrands().size());
-        assertEquals(1, def.getColumns().size());
+        assertEquals("/content/natwest", def.getBrands().get(0).getRoot());
+        // Columns are the fixed governance schema regardless of any per-component config.
+        assertEquals(12, def.getColumns().size());
         assertEquals("excludeFromReport", def.getExcludeProperty().getName());
         assertEquals("true", def.getExcludeProperty().getValue());
     }
@@ -92,10 +92,8 @@ class ReportDefinitionReaderTest {
         context.build()
                 .resource(base, "sling:resourceType", ReportType.EXPIRING_PUBLISHED.getResourceType(),
                         "thresholdDays", 30L, "maxRecords", 500L)
-                .resource(base + "/brands/item0", "brand", "NatWest",
-                        "rootPaths", new String[]{"/content/natwest", "/content/natwest-intl"})
-                .resource(base + "/brands/item1", "brand", "RBS",
-                        "rootPaths", new String[]{"/content/rbs"})
+                .resource(base + "/brands/item0", "brand", "NatWest", "rootPath", "/content/natwest")
+                .resource(base + "/brands/item1", "brand", "RBS", "rootPath", "/content/rbs")
                 .commit();
 
         final ReportDefinition def = readAt(base);
@@ -106,8 +104,18 @@ class ReportDefinitionReaderTest {
         assertTrue(def.isSendToWorkfront());
         assertEquals(2, def.getBrands().size());
         assertEquals("NatWest", def.getBrands().get(0).getBrand());
-        assertEquals(2, def.getBrands().get(0).getRoots().size());
-        assertEquals("/content/rbs", def.getBrands().get(1).getRoots().get(0));
+        assertEquals("/content/natwest", def.getBrands().get(0).getRoot());
+        assertEquals("/content/rbs", def.getBrands().get(1).getRoot());
+    }
+
+    @Test
+    void clampsMaxRecordsToHardCapForNonAllLive() {
+        final String base = "/content/cfg/capped";
+        context.build().resource(base,
+                "sling:resourceType", ReportType.EXPIRING_PUBLISHED.getResourceType(),
+                "maxRecords", 5000L).commit();
+        // Even a direct CRXDE value above the hard cap is clamped down to 1000.
+        assertEquals(ReportsConstants.HARD_CAP_MAX_RECORDS, readAt(base).getMaxRecords());
     }
 
     @Test
@@ -121,7 +129,7 @@ class ReportDefinitionReaderTest {
         // Default single "all" brand under /content.
         assertEquals(1, def.getBrands().size());
         assertEquals("all", def.getBrands().get(0).getBrand());
-        assertEquals("/content", def.getBrands().get(0).getRoots().get(0));
+        assertEquals("/content", def.getBrands().get(0).getRoot());
         // Default months for the stale report + default cap.
         assertEquals(ReportsConstants.DEFAULT_STALE_MONTHS, def.getThresholdMonths());
         assertEquals(ReportsConstants.DEFAULT_MAX_RECORDS, def.getMaxRecords());
@@ -148,17 +156,16 @@ class ReportDefinitionReaderTest {
     }
 
     @Test
-    void readsCustomColumns() {
+    void columnsAreAlwaysTheFixedGovernanceSchema() {
         final String base = "/content/cfg/archive";
+        // Any per-component "columns" nodes are ignored now that the Columns tab is gone.
         context.build()
                 .resource(base, "sling:resourceType", ReportType.ARCHIVE_AGED.getResourceType())
                 .resource(base + "/columns/item0", "header", "Path", "source", ":path")
-                .resource(base + "/columns/item1", "header", "Brand", "source", ":brand")
                 .commit();
 
         final ReportDefinition def = readAt(base);
-        assertEquals(2, def.getColumns().size());
-        assertEquals(":path", def.getColumns().get(0).getSource());
-        assertEquals("Brand", def.getColumns().get(1).getHeader());
+        assertEquals(12, def.getColumns().size());
+        assertEquals("Hash", def.getColumns().get(0).getHeader());
     }
 }
