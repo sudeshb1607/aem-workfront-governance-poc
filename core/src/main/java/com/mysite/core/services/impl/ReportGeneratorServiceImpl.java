@@ -238,20 +238,15 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                             definition.getReportId(), brand.getBrand(), definition.getComponentPath(), e);
                 }
                 // Breathe after each brand (except the last) so the shared author recovers.
-                if (throttle && cooldownSeconds > 0 && i < brands.size() - 1) {
-                    LOG.info("Report '{}': brand cool-off {}",
-                            definition.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
-                    if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
-                        LOG.warn("Report '{}': deactivating during brand cool-down; stopping run",
-                                definition.getReportId());
-                        break;
-                    }
+                if (throttle && cooldownSeconds > 0 && i < brands.size() - 1
+                        && !coolDown(definition.getReportId(), "brand")) {
+                    break;
                 }
             }
             final long reportMillis = (System.nanoTime() - reportStartNanos) / 1_000_000L;
             LOG.info("[STEP] Report '{}' DONE — {} row(s) across {} CSV(s) in {} ({} s)",
                     definition.getReportId(), totalRows, csvPaths.size(),
-                    DurationUtil.format(reportMillis), String.format("%.1f", reportMillis / 1000.0));
+                    DurationUtil.format(reportMillis), reportMillis / 1000L);
             return ReportRunResult.success(csvPaths, totalRows);
         } catch (final LoginException e) {
             LOG.error("Could not obtain service resolver for report {}", definition.getReportId(), e);
@@ -295,7 +290,7 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         final long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
         LOG.info("Report '{}' brand '{}': completed {} rows in {} ({} s)",
                 def.getReportId(), brand.getBrand(), rows,
-                DurationUtil.format(elapsedMillis), String.format("%.1f", elapsedMillis / 1000.0));
+                DurationUtil.format(elapsedMillis), elapsedMillis / 1000L);
         return rows;
     }
 
@@ -365,14 +360,8 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 refreshSession(session, def);
                 LOG.info("Report '{}': visited {} page(s), {} row(s) so far",
                         def.getReportId(), visited, appended);
-                if (throttle && cooldownSeconds > 0) {
-                    LOG.info("Report '{}': batch cool-off {}",
-                            def.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
-                    if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
-                        LOG.warn("Report '{}': deactivating during batch cool-down; stopping traversal",
-                                def.getReportId());
-                        break;
-                    }
+                if (throttle && cooldownSeconds > 0 && !coolDown(def.getReportId(), "batch")) {
+                    break;
                 }
             }
         }
@@ -382,6 +371,24 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     private static boolean isPage(final Resource resource) {
         return resource != null
                 && NT_PAGE.equals(resource.getValueMap().get(PN_PRIMARY_TYPE, String.class));
+    }
+
+    /**
+     * Logs and takes one throttled cool-down (used between batches and between
+     * brands). Shared so the two call sites stay identical and simple.
+     *
+     * @param reportId the report id, for the log line
+     * @param phase    the phase label ({@code "batch"} or {@code "brand"})
+     * @return {@code true} to continue; {@code false} if the component is
+     *         deactivating and the run should stop
+     */
+    private boolean coolDown(final String reportId, final String phase) {
+        LOG.info("Report '{}': {} cool-off {}", reportId, phase, DurationUtil.format(cooldownSeconds * 1000L));
+        if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
+            LOG.warn("Report '{}': deactivating during {} cool-down; stopping", reportId, phase);
+            return false;
+        }
+        return true;
     }
 
     private void refreshSession(final Session session, final ReportDefinition def) {

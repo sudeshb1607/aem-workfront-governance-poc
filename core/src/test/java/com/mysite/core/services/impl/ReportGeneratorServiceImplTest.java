@@ -1,5 +1,6 @@
 package com.mysite.core.services.impl;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,7 +17,6 @@ import org.apache.sling.api.resource.LoginException;
 import org.apache.sling.api.resource.Resource;
 import org.apache.sling.api.resource.ResourceResolver;
 import org.apache.sling.api.resource.ResourceResolverFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -284,12 +284,13 @@ class ReportGeneratorServiceImplTest {
     }
 
     @Test
-    void activateReadsBatchSize() {
+    void activateReadsBatchSizeWithoutError() {
         final ReportGeneratorServiceImpl s = new ReportGeneratorServiceImpl();
         final ReportGeneratorServiceImpl.Config cfg = mock(ReportGeneratorServiceImpl.Config.class);
         when(cfg.pageBatchSize()).thenReturn(250);
-        s.activate(cfg);
-        // no exception; batch size applied internally
+        when(cfg.cooldownSeconds()).thenReturn(10);
+        // Activation applies the batch size / cool-down internally and must not throw.
+        assertDoesNotThrow(() -> s.activate(cfg));
     }
 
     @Test
