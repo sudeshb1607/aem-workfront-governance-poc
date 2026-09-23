@@ -6,11 +6,12 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -40,11 +41,6 @@ import com.day.cq.commons.Externalizer;
 import com.day.cq.dam.api.AssetManager;
 import com.day.cq.replication.ReplicationActionType;
 import com.day.cq.replication.Replicator;
-import com.day.cq.search.PredicateGroup;
-import com.day.cq.search.Query;
-import com.day.cq.search.QueryBuilder;
-import com.day.cq.search.result.Hit;
-import com.day.cq.search.result.SearchResult;
 import com.mysite.core.models.report.ExcludeProperty;
 import com.mysite.core.models.report.ReportColumn;
 import com.mysite.core.reports.BrandScope;
@@ -67,8 +63,9 @@ import com.mysite.core.util.PageHashUtil;
 
 /**
  * Default {@link ReportGeneratorService}. Shared engine behind all five reports:
- * for each configured brand it traverses the brand's content root(s) in bounded
- * QueryBuilder batches, applies the report's {@link ReportFilter} plus the
+ * for each configured brand it walks the brand's content root as a bounded page
+ * hierarchy traversal (index-independent, so it never trips Oak's node-read limit
+ * on large repositories), applies the report's {@link ReportFilter} plus the
  * exclusion rules, resolves the configured columns, caps the result at
  * {@code maxRecords}, and writes {@code <outputFolder>/csv/<reportId>-<brand>.csv}
  * via the {@link AssetManager}. Each brand is isolated so one failure never
@@ -86,6 +83,8 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     private static final String CSV_MIME_TYPE = "text/csv";
     private static final String CSV_EXTENSION = ".csv";
     private static final String JCR_CONTENT = "jcr:content";
+    private static final String PN_PRIMARY_TYPE = "jcr:primaryType";
+    private static final String NT_PAGE = "cq:Page";
     private static final String PN_TITLE = "jcr:title";
     private static final String DATE_FORMAT_ISO = "yyyy-MM-dd'T'HH:mm:ssXXX";
     private static final String HTML_EXTENSION = ".html";
@@ -108,9 +107,6 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
 
     @Reference
     private ResourceResolverFactory resolverFactory;
-
-    @Reference
-    private QueryBuilder queryBuilder;
 
     @Reference
     private Replicator replicator;
@@ -292,11 +288,21 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
 
     /**
      * Appends qualifying pages under the brand's root, respecting the record cap.
-     * Traverses in bounded QueryBuilder batches; after each batch it refreshes the
-     * JCR session (so the session never goes stale on a long run) and, when
-     * {@code throttle} is on, takes a real cool-down so a shared author can breathe.
-     * Deterministic paging ({@code orderby=path} + {@code p.offset}) prevents
-     * duplicate/overlapping rows without holding a dedup Set in memory.
+     *
+     * <p>Walks the page hierarchy directly (iterative DFS over {@code cq:Page}
+     * descendants) instead of running a QueryBuilder/Oak query. A subtree walk
+     * reads only the pages under {@code root} and never descends into
+     * {@code jcr:content} component trees, so its cost is proportional to the
+     * subtree — not the whole repository. This avoids the Oak "traversed more than
+     * N nodes" failure that a {@code type=cq:Page} + {@code orderby=path} query
+     * hits when the serving index does not push the path restriction down (it
+     * would otherwise stream every page in the repo and filter by path in memory).
+     * The natural child order is deterministic, so there are no duplicate rows and
+     * no dedup Set is needed.</p>
+     *
+     * <p>Every {@code pageBatchSize} pages the JCR session is refreshed (so it
+     * never goes stale on a long run) and, when {@code throttle} is on, a real
+     * cool-down is taken so a shared author can breathe.</p>
      *
      * @param cap      the per-brand record cap ({@code 0} = unlimited)
      * @param throttle when {@code true}, cool-down between batches
@@ -305,59 +311,64 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     private long appendRoot(final ResourceResolver resolver, final String root, final ReportDefinition def,
                             final ReportFilter filter, final StringBuilder csv,
                             final int cap, final boolean throttle) {
+        final Resource rootResource = resolver.getResource(root);
+        if (rootResource == null) {
+            return 0;
+        }
         final Session session = resolver.adaptTo(Session.class);
         long appended = 0;
-        int offset = 0;
+        long visited = 0;
 
-        while (true) {
-            final Map<String, String> params = new HashMap<>();
-            params.put("path", root);
-            params.put("path.self", "true");
-            params.put("type", "cq:Page");
-            params.put("p.limit", String.valueOf(pageBatchSize));
-            params.put("p.offset", String.valueOf(offset));
-            params.put("p.guessTotal", "true");
-            params.put("orderby", "path");
+        // Iterative DFS over the page tree. We push only cq:Page children, so the
+        // walk stays inside the page hierarchy and never reads component subtrees.
+        final Deque<Resource> stack = new ArrayDeque<>();
+        stack.push(rootResource);
 
-            final Query query = queryBuilder.createQuery(PredicateGroup.create(params), session);
-            final SearchResult result = query.getResult();
-
-            int batchCount = 0;
-            for (final Hit hit : result.getHits()) {
-                batchCount++;
-                try {
-                    if (appendPageRowIfMatched(resolver, hit.getResource(), def, filter, csv)) {
-                        appended++;
-                        if (cap > 0 && appended >= cap) {
-                            return appended;
-                        }
-                    }
-                } catch (final Exception e) {
-                    LOG.warn("Skipping page during report '{}'", def.getReportId(), e);
+        while (!stack.isEmpty()) {
+            final Resource current = stack.pop();
+            for (final Resource child : current.getChildren()) {
+                if (isPage(child)) {
+                    stack.push(child);
                 }
             }
-
-            // Keep the session fresh across a long traversal (avoids stale/timeout).
-            refreshSession(session, def);
-            LOG.info("Report '{}': batch @offset {} fetched {} page(s), {} row(s) so far",
-                    def.getReportId(), offset, batchCount, appended);
-
-            if (batchCount < pageBatchSize) {
-                break;
+            if (!isPage(current)) {
+                continue; // the root may be a folder; only pages produce rows
             }
-            offset += pageBatchSize;
 
-            if (throttle && cooldownSeconds > 0) {
-                LOG.info("Report '{}': batch cool-off {}",
-                        def.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
-                if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
-                    LOG.warn("Report '{}': deactivating during batch cool-down; stopping traversal",
-                            def.getReportId());
-                    break;
+            visited++;
+            try {
+                if (appendPageRowIfMatched(resolver, current, def, filter, csv)) {
+                    appended++;
+                    if (cap > 0 && appended >= cap) {
+                        return appended;
+                    }
+                }
+            } catch (final Exception e) {
+                LOG.warn("Skipping page during report '{}'", def.getReportId(), e);
+            }
+
+            if (visited % pageBatchSize == 0) {
+                // Keep the session fresh across a long traversal (avoids stale/timeout).
+                refreshSession(session, def);
+                LOG.info("Report '{}': visited {} page(s), {} row(s) so far",
+                        def.getReportId(), visited, appended);
+                if (throttle && cooldownSeconds > 0) {
+                    LOG.info("Report '{}': batch cool-off {}",
+                            def.getReportId(), DurationUtil.format(cooldownSeconds * 1000L));
+                    if (!SchedulerSupport.await(cooldownSeconds, stopLatch)) {
+                        LOG.warn("Report '{}': deactivating during batch cool-down; stopping traversal",
+                                def.getReportId());
+                        break;
+                    }
                 }
             }
         }
         return appended;
+    }
+
+    private static boolean isPage(final Resource resource) {
+        return resource != null
+                && NT_PAGE.equals(resource.getValueMap().get(PN_PRIMARY_TYPE, String.class));
     }
 
     private void refreshSession(final Session session, final ReportDefinition def) {

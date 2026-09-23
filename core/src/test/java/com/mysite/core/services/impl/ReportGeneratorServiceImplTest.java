@@ -8,10 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.sling.api.resource.LoginException;
@@ -28,11 +26,6 @@ import com.day.cq.commons.Externalizer;
 import com.day.cq.dam.api.AssetManager;
 import com.day.cq.replication.ReplicationActionType;
 import com.day.cq.replication.Replicator;
-import com.day.cq.search.PredicateGroup;
-import com.day.cq.search.Query;
-import com.day.cq.search.QueryBuilder;
-import com.day.cq.search.result.Hit;
-import com.day.cq.search.result.SearchResult;
 import com.mysite.core.reports.ReportDefinition;
 import com.mysite.core.reports.ReportDefinitionReader;
 import com.mysite.core.reports.ReportFilter;
@@ -153,40 +146,29 @@ class ReportGeneratorServiceImplTest {
         return page(path, "jcr:primaryType", "cq:PageContent", "cq:lastModified", cal, "jcr:title", path);
     }
 
-    private CapturingGenerator generatorReturningHits(final List<Resource> hits) throws Exception {
+    /**
+     * Wires a capturing generator to the AemContext resolver. The engine now walks
+     * the real page hierarchy, so tests just build cq:Page nodes under the brand
+     * root and the traversal finds them — no QueryBuilder mocking needed.
+     */
+    private CapturingGenerator newGenerator(final int pageBatchSize) throws Exception {
         final CapturingGenerator gen = new CapturingGenerator();
-
         final ResourceResolverFactory rrf = mock(ResourceResolverFactory.class);
         when(rrf.getServiceResourceResolver(any())).thenReturn(context.resourceResolver());
-
-        final QueryBuilder qb = mock(QueryBuilder.class);
-        final Query query = mock(Query.class);
-        final SearchResult result = mock(SearchResult.class);
-        final List<Hit> hitList = new ArrayList<>();
-        for (final Resource r : hits) {
-            final Hit hit = mock(Hit.class);
-            when(hit.getResource()).thenReturn(r);
-            hitList.add(hit);
-        }
-        when(qb.createQuery(any(PredicateGroup.class), any())).thenReturn(query);
-        when(query.getResult()).thenReturn(result);
-        when(result.getHits()).thenReturn(hitList);
-
         setField(gen, "resolverFactory", rrf);
-        setField(gen, "queryBuilder", qb);
         setField(gen, "replicator", mock(Replicator.class));
-        setField(gen, "pageBatchSize", 500);
+        setField(gen, "pageBatchSize", pageBatchSize);
         return gen;
     }
 
     @Test
     void generatesPerBrandCsvForMatchingPages() throws Exception {
-        final Resource oldA = stalePage("/content/natwest/a", 8);
-        final Resource fresh = stalePage("/content/natwest/b", 1);
-        final Resource oldC = stalePage("/content/natwest/c", 9);
+        stalePage("/content/natwest/a", 8);
+        stalePage("/content/natwest/b", 1);
+        stalePage("/content/natwest/c", 9);
 
         final ReportDefinition def = staleDefinition("natwest", "/content/natwest", 0);
-        final CapturingGenerator gen = generatorReturningHits(java.util.Arrays.asList(oldA, fresh, oldC));
+        final CapturingGenerator gen = newGenerator(500);
 
         final ReportRunResult result = gen.generate(def);
 
@@ -203,11 +185,11 @@ class ReportGeneratorServiceImplTest {
 
     @Test
     void enforcesMaxRecordsCap() throws Exception {
-        final Resource oldA = stalePage("/content/rbs/a", 8);
-        final Resource oldB = stalePage("/content/rbs/b", 9);
+        stalePage("/content/rbs/a", 8);
+        stalePage("/content/rbs/b", 9);
 
         final ReportDefinition def = staleDefinition("rbs", "/content/rbs", 1);
-        final CapturingGenerator gen = generatorReturningHits(java.util.Arrays.asList(oldA, oldB));
+        final CapturingGenerator gen = newGenerator(500);
 
         final ReportRunResult result = gen.generate(def);
         assertEquals(1, result.getTotalRows(), "capped at 1 record");
@@ -216,7 +198,7 @@ class ReportGeneratorServiceImplTest {
     @Test
     void missingRootProducesHeaderOnlyCsv() throws Exception {
         final ReportDefinition def = staleDefinition("ulster", "/content/does-not-exist", 0);
-        final CapturingGenerator gen = generatorReturningHits(java.util.Collections.emptyList());
+        final CapturingGenerator gen = newGenerator(500);
 
         final ReportRunResult result = gen.generate(def);
         assertTrue(result.isSuccess());
@@ -242,16 +224,23 @@ class ReportGeneratorServiceImplTest {
 
     @Test
     void brandFailureIsIsolatedAndRunStillSucceeds() throws Exception {
-        page("/content/natwest/a", "jcr:primaryType", "cq:PageContent");
+        stalePage("/content/natwest/a", 8);
         final ReportDefinition def = staleDefinition("natwest", "/content/natwest", 0);
 
-        final CapturingGenerator gen = new CapturingGenerator();
+        // A brand whose CSV write blows up must not fail the whole run.
+        final ReportGeneratorServiceImpl gen = new ReportGeneratorServiceImpl() {
+            @Override
+            void writeAsset(final ResourceResolver resolver, final String csvPath, final String csvContent) {
+                throw new IllegalStateException("write boom");
+            }
+            @Override
+            void replicate(final ResourceResolver resolver, final String csvPath) {
+                // no-op
+            }
+        };
         final ResourceResolverFactory rrf = mock(ResourceResolverFactory.class);
         when(rrf.getServiceResourceResolver(any())).thenReturn(context.resourceResolver());
-        final QueryBuilder qb = mock(QueryBuilder.class);
-        when(qb.createQuery(any(PredicateGroup.class), any())).thenThrow(new RuntimeException("query boom"));
         setField(gen, "resolverFactory", rrf);
-        setField(gen, "queryBuilder", qb);
         setField(gen, "replicator", mock(Replicator.class));
         setField(gen, "pageBatchSize", 500);
 
@@ -283,31 +272,13 @@ class ReportGeneratorServiceImplTest {
     }
 
     @Test
-    void paginatesAcrossBatches() throws Exception {
-        final Resource p1 = stalePage("/content/nw/a", 8);
-        final Resource p2 = stalePage("/content/nw/b", 9);
+    void traversesAcrossBatchBoundaries() throws Exception {
+        stalePage("/content/nw/a", 8);
+        stalePage("/content/nw/b", 9);
         final ReportDefinition def = staleDefinition("nw", "/content/nw", 0);
 
-        final CapturingGenerator gen = new CapturingGenerator();
-        final ResourceResolverFactory rrf = mock(ResourceResolverFactory.class);
-        when(rrf.getServiceResourceResolver(any())).thenReturn(context.resourceResolver());
-        final QueryBuilder qb = mock(QueryBuilder.class);
-        final Query query = mock(Query.class);
-        final SearchResult result = mock(SearchResult.class);
-        final Hit h1 = mock(Hit.class);
-        when(h1.getResource()).thenReturn(p1);
-        final Hit h2 = mock(Hit.class);
-        when(h2.getResource()).thenReturn(p2);
-        when(qb.createQuery(any(PredicateGroup.class), any())).thenReturn(query);
-        when(query.getResult()).thenReturn(result);
-        when(result.getHits()).thenReturn(
-                java.util.Collections.singletonList(h1),
-                java.util.Collections.singletonList(h2),
-                java.util.Collections.emptyList());
-        setField(gen, "resolverFactory", rrf);
-        setField(gen, "queryBuilder", qb);
-        setField(gen, "replicator", mock(Replicator.class));
-        setField(gen, "pageBatchSize", 1); // force pagination across batches
+        // pageBatchSize=1 forces a session refresh + cool-down check on every page.
+        final CapturingGenerator gen = newGenerator(1);
 
         assertEquals(2, gen.generate(def).getTotalRows());
     }
@@ -325,7 +296,11 @@ class ReportGeneratorServiceImplTest {
     void writesAndActivatesViaAssetManager() throws Exception {
         // Fully-mocked resolver so the real writeAsset + replicate seams run.
         final ResourceResolver resolver = mock(ResourceResolver.class);
-        when(resolver.getResource("/content/x")).thenReturn(mock(Resource.class));
+        // The brand root resolves to an empty (non-page) node, so the walk yields 0 rows.
+        final Resource rootRes = mock(Resource.class);
+        when(rootRes.getChildren()).thenReturn(java.util.Collections.emptyList());
+        when(rootRes.getValueMap()).thenReturn(org.apache.sling.api.resource.ValueMap.EMPTY);
+        when(resolver.getResource("/content/x")).thenReturn(rootRes);
         final Session session = mock(Session.class);
         when(resolver.adaptTo(Session.class)).thenReturn(session);
         final AssetManager am = mock(AssetManager.class);
@@ -333,13 +308,6 @@ class ReportGeneratorServiceImplTest {
 
         final ResourceResolverFactory rrf = mock(ResourceResolverFactory.class);
         when(rrf.getServiceResourceResolver(any())).thenReturn(resolver);
-
-        final QueryBuilder qb = mock(QueryBuilder.class);
-        final Query query = mock(Query.class);
-        final SearchResult result = mock(SearchResult.class);
-        when(qb.createQuery(any(PredicateGroup.class), any())).thenReturn(query);
-        when(query.getResult()).thenReturn(result);
-        when(result.getHits()).thenReturn(java.util.Collections.emptyList());
 
         final Replicator replicator = mock(Replicator.class);
 
@@ -355,7 +323,6 @@ class ReportGeneratorServiceImplTest {
 
         final ReportGeneratorServiceImpl gen = new ReportGeneratorServiceImpl();
         setField(gen, "resolverFactory", rrf);
-        setField(gen, "queryBuilder", qb);
         setField(gen, "replicator", replicator);
         setField(gen, "pageBatchSize", 500);
 
