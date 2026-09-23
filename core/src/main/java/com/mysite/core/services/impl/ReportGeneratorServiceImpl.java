@@ -244,9 +244,9 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 }
             }
             final long reportMillis = (System.nanoTime() - reportStartNanos) / 1_000_000L;
-            LOG.info("[STEP] Report '{}' DONE — {} row(s) across {} CSV(s) in {} ({} s)",
+            LOG.info("[STEP] Report '{}' DONE — {} row(s) across {} CSV(s) in {} ({} ms)",
                     definition.getReportId(), totalRows, csvPaths.size(),
-                    DurationUtil.format(reportMillis), reportMillis / 1000L);
+                    DurationUtil.format(reportMillis), reportMillis);
             return ReportRunResult.success(csvPaths, totalRows);
         } catch (final LoginException e) {
             LOG.error("Could not obtain service resolver for report {}", definition.getReportId(), e);
@@ -288,9 +288,9 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         }
 
         final long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
-        LOG.info("Report '{}' brand '{}': completed {} rows in {} ({} s)",
+        LOG.info("Report '{}' brand '{}': completed {} rows in {} ({} ms)",
                 def.getReportId(), brand.getBrand(), rows,
-                DurationUtil.format(elapsedMillis), elapsedMillis / 1000L);
+                DurationUtil.format(elapsedMillis), elapsedMillis);
         return rows;
     }
 
