@@ -214,9 +214,14 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                                       final boolean throttle) {
         final List<String> csvPaths = new ArrayList<>();
         long totalRows = 0;
+        final long reportStartNanos = System.nanoTime();
         try (ResourceResolver resolver = getServiceResolver()) {
             final String csvFolder = definition.getOutputFolder() + "/csv";
             final List<BrandScope> brands = definition.getBrands();
+
+            LOG.info("[STEP] Report '{}' START — {} brand(s), throttle={}, cap={}, output={}",
+                    definition.getReportId(), brands.size(), throttle,
+                    definition.getMaxRecords() == 0 ? "unlimited" : definition.getMaxRecords(), csvFolder);
 
             for (int i = 0; i < brands.size(); i++) {
                 final BrandScope brand = brands.get(i);
@@ -243,6 +248,10 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                     }
                 }
             }
+            final long reportMillis = (System.nanoTime() - reportStartNanos) / 1_000_000L;
+            LOG.info("[STEP] Report '{}' DONE — {} row(s) across {} CSV(s) in {} ({} s)",
+                    definition.getReportId(), totalRows, csvPaths.size(),
+                    DurationUtil.format(reportMillis), String.format("%.1f", reportMillis / 1000.0));
             return ReportRunResult.success(csvPaths, totalRows);
         } catch (final LoginException e) {
             LOG.error("Could not obtain service resolver for report {}", definition.getReportId(), e);
@@ -268,6 +277,7 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         final int cap = def.getMaxRecords(); // 0 = unlimited (all-live only)
         long rows = 0;
         final String root = brand.getRoot();
+        LOG.info("[STEP] Report '{}' brand '{}': traversing {}", def.getReportId(), brand.getBrand(), root);
         if (resolver.getResource(root) == null) {
             LOG.warn("Report '{}' brand '{}': root {} does not exist; writing header-only CSV",
                     def.getReportId(), brand.getBrand(), root);
@@ -275,14 +285,17 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
             rows = appendRoot(resolver, root, def, filter, csv, cap, throttle);
         }
 
+        LOG.debug("[STEP] Report '{}' brand '{}': writing CSV {}", def.getReportId(), brand.getBrand(), csvPath);
         writeAsset(resolver, csvPath, csv.toString());
         if (def.isActivateCsv()) {
+            LOG.debug("[STEP] Report '{}' brand '{}': activating {}", def.getReportId(), brand.getBrand(), csvPath);
             replicate(resolver, csvPath);
         }
 
         final long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000L;
-        LOG.info("Report '{}' brand '{}': completed {} rows in {}",
-                def.getReportId(), brand.getBrand(), rows, DurationUtil.format(elapsedMillis));
+        LOG.info("Report '{}' brand '{}': completed {} rows in {} ({} s)",
+                def.getReportId(), brand.getBrand(), rows,
+                DurationUtil.format(elapsedMillis), String.format("%.1f", elapsedMillis / 1000.0));
         return rows;
     }
 
