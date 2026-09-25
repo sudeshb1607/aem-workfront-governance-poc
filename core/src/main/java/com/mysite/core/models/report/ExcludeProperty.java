@@ -15,6 +15,8 @@
  */
 package com.mysite.core.models.report;
 
+import org.apache.sling.api.resource.ValueMap;
+
 /**
  * Immutable value object describing an exclude-property condition: a page is
  * omitted from the report when the named property (read from {@code jcr:content}
@@ -44,6 +46,24 @@ public final class ExcludeProperty {
      */
     public String getValue() {
         return value;
+    }
+
+    /**
+     * Tests whether this exclusion condition matches: the named property, read
+     * from {@code jcr:content} first and then the page node, equals the configured
+     * value. Shared by the report engine and the per-report filters so the rule
+     * lives in one place.
+     *
+     * @param contentVm the {@code jcr:content} value map (never {@code null}; use
+     *                  {@link ValueMap#EMPTY} when there is no content node)
+     * @param pageVm    the page node value map
+     * @return {@code true} when the property equals the configured value
+     */
+    public boolean matches(final ValueMap contentVm, final ValueMap pageVm) {
+        final Object actual = contentVm.containsKey(name)
+                ? contentVm.get(name)
+                : (pageVm.containsKey(name) ? pageVm.get(name) : null);
+        return actual != null && value.equals(String.valueOf(actual));
     }
 
     @Override

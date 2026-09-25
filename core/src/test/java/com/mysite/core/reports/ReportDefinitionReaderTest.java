@@ -58,7 +58,7 @@ class ReportDefinitionReaderTest {
         assertEquals(1, def.getBrands().size());
         assertEquals("/content/natwest", def.getBrands().get(0).getRoot());
         // Columns are the fixed governance schema regardless of any per-component config.
-        assertEquals(12, def.getColumns().size());
+        assertEquals(14, def.getColumns().size());
         assertEquals("excludeFromReport", def.getExcludeProperty().getName());
         assertEquals("true", def.getExcludeProperty().getValue());
     }
@@ -135,8 +135,8 @@ class ReportDefinitionReaderTest {
         assertEquals(ReportsConstants.DEFAULT_MAX_RECORDS, def.getMaxRecords());
         // No exclusion property configured -> no property-based exclusion.
         org.junit.jupiter.api.Assertions.assertNull(def.getExcludeProperty());
-        // Default 12-column governance schema.
-        assertEquals(12, def.getColumns().size());
+        // Default 14-column governance schema.
+        assertEquals(14, def.getColumns().size());
         assertEquals("Hash", def.getColumns().get(0).getHeader());
         // Default output folder for the type.
         assertEquals(ReportsConstants.REPORTS_ROOT + "/not-live-stale", def.getOutputFolder());
@@ -165,7 +165,7 @@ class ReportDefinitionReaderTest {
                 .commit();
 
         final ReportDefinition def = readAt(base);
-        assertEquals(12, def.getColumns().size());
+        assertEquals(14, def.getColumns().size());
         assertEquals("Hash", def.getColumns().get(0).getHeader());
     }
 }

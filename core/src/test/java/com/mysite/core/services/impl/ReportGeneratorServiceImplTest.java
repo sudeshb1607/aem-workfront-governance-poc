@@ -101,6 +101,7 @@ class ReportGeneratorServiceImplTest {
 
     @Test
     void skipsPageWhenExcludePropertyMatches() {
+        // A page whose OWN exclusion flag is set is dropped from the report (AC5).
         final ReportDefinition def = allLiveDefinition(
                 "excludePropertyName", "excludeFromReport", "excludePropertyValue", "true");
         final Resource page = page("/content/natwest/x",
@@ -111,12 +112,32 @@ class ReportGeneratorServiceImplTest {
 
     @Test
     void doesNotExcludeWhenNoExcludePropertyConfigured() {
-        // Empty exclude-property name => no comparison, even if the flag is set on the page.
+        // No exclude-property name => no comparison, even if the flag is set on the page.
         final ReportDefinition def = allLiveDefinition();
         final Resource page = page("/content/natwest/y",
                 "jcr:primaryType", "cq:PageContent", "excludeFromReport", "true");
         assertTrue(new ReportGeneratorServiceImpl().appendPageRowIfMatched(
                 context.resourceResolver(), page, def, acceptAll, new StringBuilder()));
+    }
+
+    @Test
+    void reportsHasExcludedChildrenColumn() {
+        // Parent is NOT flagged (so it stays in the report); it has a child page that IS flagged.
+        final ReportDefinition def = allLiveDefinition(
+                "excludePropertyName", "excludeFromReport", "excludePropertyValue", "true");
+        page("/content/natwest/parent", "jcr:primaryType", "cq:PageContent");
+        context.build()
+                .resource("/content/natwest/parent/child", "jcr:primaryType", "cq:Page")
+                .resource("/content/natwest/parent/child/jcr:content",
+                        "jcr:primaryType", "cq:PageContent", "excludeFromReport", "true")
+                .commit();
+        final Resource parent = context.resourceResolver().getResource("/content/natwest/parent");
+
+        final StringBuilder csv = new StringBuilder();
+        assertTrue(new ReportGeneratorServiceImpl().appendPageRowIfMatched(
+                context.resourceResolver(), parent, def, acceptAll, csv));
+        // "Has Excluded Children" is the last column.
+        assertTrue(csv.toString().trim().endsWith("True"), csv.toString());
     }
 
     @Test
@@ -281,6 +302,30 @@ class ReportGeneratorServiceImplTest {
         final CapturingGenerator gen = newGenerator(1);
 
         assertEquals(2, gen.generate(def).getTotalRows());
+    }
+
+    @Test
+    void hasLivePublishedChildDetectsLiveDirectChild() {
+        final ReportGeneratorServiceImpl gen = new ReportGeneratorServiceImpl();
+
+        // A direct child cq:Page whose jcr:content is activated (published).
+        final Resource liveChild = mock(Resource.class);
+        when(liveChild.getValueMap()).thenReturn(new org.apache.sling.api.wrappers.ValueMapDecorator(
+                java.util.Collections.singletonMap("jcr:primaryType", (Object) "cq:Page")));
+        final Resource childContent = mock(Resource.class);
+        when(liveChild.getChild("jcr:content")).thenReturn(childContent);
+        final com.day.cq.replication.ReplicationStatus status =
+                mock(com.day.cq.replication.ReplicationStatus.class);
+        when(childContent.adaptTo(com.day.cq.replication.ReplicationStatus.class)).thenReturn(status);
+        when(status.isActivated()).thenReturn(true);
+
+        final Resource withLiveChild = mock(Resource.class);
+        when(withLiveChild.getChildren()).thenReturn(java.util.Collections.singletonList(liveChild));
+        assertTrue(gen.hasLivePublishedChild(withLiveChild));
+
+        final Resource noChildren = mock(Resource.class);
+        when(noChildren.getChildren()).thenReturn(java.util.Collections.emptyList());
+        assertFalse(gen.hasLivePublishedChild(noChildren));
     }
 
     @Test

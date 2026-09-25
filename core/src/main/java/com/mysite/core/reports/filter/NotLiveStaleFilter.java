@@ -13,6 +13,10 @@ import com.mysite.core.util.PagePublicationUtil;
  * Report 3 — Not-Live Stale: pages that are not published and were not modified
  * within the threshold window (a missing date is treated as stale). The date
  * property is configurable. Self-contained.
+ *
+ * <p>Whether a page has live child pages is <em>reported as a column</em>
+ * ({@code :hasLiveChildren}, resolved by the engine) rather than used to filter,
+ * so reviewers can see it and decide — see AC3.</p>
  */
 public final class NotLiveStaleFilter implements ReportFilter {
 

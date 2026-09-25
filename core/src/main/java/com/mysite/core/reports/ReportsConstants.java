@@ -57,6 +57,10 @@ public final class ReportsConstants {
     public static final String SOURCE_BRAND = ":brand";
     public static final String SOURCE_PUBLISHED = ":published";
     public static final String SOURCE_DAYS_TO_REVIEW = ":daysToReview";
+    /** True when the page has at least one published (live) direct child page. */
+    public static final String SOURCE_HAS_LIVE_CHILDREN = ":hasLiveChildren";
+    /** True when any direct child page (live or not) carries the configured exclusion flag. */
+    public static final String SOURCE_HAS_EXCLUDED_CHILDREN = ":hasExcludedChildren";
 
     // --- Property names read by the rules. ---
     public static final String PN_LAST_MODIFIED = "cq:lastModified";
@@ -85,7 +89,7 @@ public final class ReportsConstants {
      * report unless overridden per component. Matches the header expected by the
      * Workfront JSON converter.
      *
-     * @return an unmodifiable list of the 12 default columns
+     * @return an unmodifiable list of the 14 default columns
      */
     public static List<ReportColumn> defaultColumns() {
         return Collections.unmodifiableList(Arrays.asList(
@@ -100,6 +104,8 @@ public final class ReportsConstants {
                 new ReportColumn("Days For Next Review", SOURCE_DAYS_TO_REVIEW),
                 new ReportColumn("Franchise", "franchise"),
                 new ReportColumn("Page Owners", "pageOwners"),
-                new ReportColumn("Template", "cq:template")));
+                new ReportColumn("Template", "cq:template"),
+                new ReportColumn("Has Live Children", SOURCE_HAS_LIVE_CHILDREN),
+                new ReportColumn("Has Excluded Children", SOURCE_HAS_EXCLUDED_CHILDREN)));
     }
 }

@@ -419,16 +419,17 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         }
         final Resource content = pageResource.getChild(JCR_CONTENT);
         final ValueMap contentVm = content != null ? content.getValueMap() : ValueMap.EMPTY;
-        final ValueMap pageVm = pageResource.getValueMap();
 
-        if (isExcludedByProperty(contentVm, pageVm, def.getExcludeProperty())) {
+        // A page whose OWN exclusion flag is set is dropped from the report (AC5).
+        final ExcludeProperty ep = def.getExcludeProperty();
+        if (ep != null && ep.matches(contentVm, pageResource.getValueMap())) {
             return false;
         }
         if (!filter.accept(pageResource, contentVm)) {
             return false;
         }
 
-        appendRow(resolver, pageResource, content, contentVm, def.getColumns(), csv);
+        appendRow(resolver, pageResource, content, contentVm, def, csv);
         return true;
     }
 
@@ -444,23 +445,6 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
         return false;
     }
 
-    /**
-     * Applies the single optional exclude-property condition. When {@code ep} is
-     * {@code null} (no property configured) no comparison is made. The property is
-     * read from {@code jcr:content} first, then the page node.
-     *
-     * @return {@code true} when the page should be excluded
-     */
-    private boolean isExcludedByProperty(final ValueMap contentVm, final ValueMap pageVm,
-                                         final ExcludeProperty ep) {
-        if (ep == null) {
-            return false;
-        }
-        final Object value = contentVm.containsKey(ep.getName())
-                ? contentVm.get(ep.getName())
-                : (pageVm.containsKey(ep.getName()) ? pageVm.get(ep.getName()) : null);
-        return value != null && ep.getValue().equals(String.valueOf(value));
-    }
 
     // ------------------------------------------------------------------ CSV rows
 
@@ -473,17 +457,20 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
     }
 
     private void appendRow(final ResourceResolver resolver, final Resource pageResource, final Resource content,
-                           final ValueMap contentVm, final List<ReportColumn> columns, final StringBuilder csv) {
+                           final ValueMap contentVm, final ReportDefinition def, final StringBuilder csv) {
         final boolean published = PagePublicationUtil.isPublished(content);
+        final ExcludeProperty ep = def.getExcludeProperty();
+        final List<ReportColumn> columns = def.getColumns();
         final List<String> values = new ArrayList<>(columns.size());
         for (final ReportColumn column : columns) {
-            values.add(resolveColumn(resolver, pageResource, contentVm, column, published));
+            values.add(resolveColumn(resolver, pageResource, contentVm, column, published, ep));
         }
         CsvSupport.appendRow(csv, values);
     }
 
     private String resolveColumn(final ResourceResolver resolver, final Resource pageResource,
-                                 final ValueMap contentVm, final ReportColumn column, final boolean published) {
+                                 final ValueMap contentVm, final ReportColumn column,
+                                 final boolean published, final ExcludeProperty ep) {
         final String source = column.getSource();
         switch (source) {
             case ReportsConstants.SOURCE_TITLE:
@@ -500,9 +487,49 @@ public class ReportGeneratorServiceImpl implements ReportGeneratorService {
                 return published ? "True" : "False";
             case ReportsConstants.SOURCE_DAYS_TO_REVIEW:
                 return daysToReview(contentVm);
+            case ReportsConstants.SOURCE_HAS_LIVE_CHILDREN:
+                return hasLivePublishedChild(pageResource) ? "True" : "False";
+            case ReportsConstants.SOURCE_HAS_EXCLUDED_CHILDREN:
+                return hasExcludedChild(pageResource, ep) ? "True" : "False";
             default:
                 return formatValue(contentVm.get(source));
         }
+    }
+
+    /**
+     * @return {@code true} when the page has at least one direct child {@code cq:Page}
+     *         that is published (live). Direct children only, so it stays cheap even
+     *         for the uncapped all-live report. Package-private for unit testing.
+     */
+    boolean hasLivePublishedChild(final Resource page) {
+        for (final Resource child : page.getChildren()) {
+            if (isPage(child) && PagePublicationUtil.isPublished(child.getChild(JCR_CONTENT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return {@code true} when any direct child {@code cq:Page} (published or not)
+     *         carries the configured exclusion flag. Direct children only, so it
+     *         stays cheap. Package-private for unit testing.
+     */
+    boolean hasExcludedChild(final Resource page, final ExcludeProperty ep) {
+        if (ep == null) {
+            return false;
+        }
+        for (final Resource child : page.getChildren()) {
+            if (!isPage(child)) {
+                continue;
+            }
+            final Resource childContent = child.getChild(JCR_CONTENT);
+            final ValueMap childContentVm = childContent != null ? childContent.getValueMap() : ValueMap.EMPTY;
+            if (ep.matches(childContentVm, child.getValueMap())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String daysToReview(final ValueMap contentVm) {
